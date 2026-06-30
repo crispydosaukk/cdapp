@@ -28,8 +28,7 @@ export default function AppHeader({ user, onMenuPress, navigation, cartItems, tr
 
     try {
       const userId = user.id || user.customer_id;
-      const response = await getNotifications("customer", userId);
-      const res = response.data; // Fix: Access .data from axios response
+      const res = await getNotifications("customer", userId);
 
       if (res?.status === 1) {
         const uniqueUnread = new Set();

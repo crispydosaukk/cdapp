@@ -1,15 +1,15 @@
-import api from "../config/api";
-import { Alert } from "react-native";
+import firestore from '@react-native-firebase/firestore';
 
+// Fetch global settings
 export const fetchAppSettings = async () => {
     try {
-        const res = await api.get("/app-settings");
-        if (res.data.status === 1) {
-            return res.data.data;
+        const doc = await firestore().collection("settings").doc("global").get();
+        if (doc.exists) {
+            return doc.data();
         }
         return null;
     } catch (error) {
-        console.error("Fetch App Settings Error:", error.response?.data?.message || error.message);
+        console.error("Fetch App Settings Error:", error);
         return null;
     }
 };

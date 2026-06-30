@@ -85,9 +85,7 @@ export default function Notifications({ navigation }) {
     if (!user) return;
     try {
       const userId = user.id || user.customer_id;
-      const response = await getNotifications("customer", userId);
-      // Axios returns the full response object, so we access .data for the payload
-      const res = response.data;
+      const res = await getNotifications("customer", userId);
 
       if (res?.status === 1) {
         const unique = [];

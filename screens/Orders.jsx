@@ -148,7 +148,7 @@ export default function Orders({ navigation, route }) {
   useFocusEffect(useCallback(() => {
     if (!global.lastOrderUpdate) return;
     const { order_number, status } = global.lastOrderUpdate;
-    setOrders(prev => prev.map(o => (o.order_no === order_number || o.order_number === order_number) ? { ...o, status } : o));
+    setOrders(prev => prev.map(o => (o.order_no === order_number || o.order_number === order_number) ? { ...o, order_status: status, status } : o));
     global.lastOrderUpdate = null;
   }, []));
 
@@ -166,7 +166,7 @@ export default function Orders({ navigation, route }) {
 
   const renderOrder = ({ item }) => {
     const orderId = item.order_id || item.id;
-    const orderNo = item.order_no || `#${orderId}`;
+    const orderNo = item.order_number || item.order_no || `#${orderId}`;
     const createdAt = item.created_at || item.order_date;
     let dateStr = "";
     if (createdAt) {
@@ -187,7 +187,7 @@ export default function Orders({ navigation, route }) {
     const itemsCount =
       item.items_count || item.items?.length || item.item_count || 0;
 
-    const ui = getOrderUIState(item.status, item.delivery_estimate_time);
+    const ui = getOrderUIState(item.order_status ?? item.status, item.delivery_estimate_time);
     const isEven = orderId % 2 === 0;
 
     return (
@@ -213,7 +213,7 @@ export default function Orders({ navigation, route }) {
               </View>
               <Text style={styles.orderNo}>{orderNo}</Text>
             </View>
-            {renderStatusChip(item.status)}
+            {renderStatusChip(item.order_status ?? item.status)}
           </View>
 
           <View style={styles.cardContent}>
@@ -413,7 +413,7 @@ export default function Orders({ navigation, route }) {
               <View style={styles.sheetHandle} />
               <View style={styles.sheetHeader}>
                 <View>
-                  <Text style={styles.sheetTitle}>{orderDetails?.order_no || "Order Details"}</Text>
+                  <Text style={styles.sheetTitle}>{orderDetails?.order_number || orderDetails?.order_no || "Order Details"}</Text>
                   {orderDetails?.created_at && (
                     <Text style={styles.sheetSubtitle}>
                       {new Date(orderDetails.created_at).toLocaleString()}
@@ -460,8 +460,8 @@ export default function Orders({ navigation, route }) {
                         <View style={styles.verticalDivider} />
                         <View style={styles.orderInfoItem}>
                           <Text style={styles.orderInfoLabel}>STATUS</Text>
-                          <Text style={[styles.orderInfoValueBasic, { color: ORDER_STATUS[Number(orderDetails.status)]?.color || '#333' }]}>
-                            {ORDER_STATUS[Number(orderDetails.status)]?.label || "Unknown"}
+                          <Text style={[styles.orderInfoValueBasic, { color: ORDER_STATUS[Number(orderDetails.order_status ?? orderDetails.status)]?.color || '#333' }]}>
+                            {ORDER_STATUS[Number(orderDetails.order_status ?? orderDetails.status)]?.label || "Unknown"}
                           </Text>
                         </View>
                       </View>

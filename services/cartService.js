@@ -1,53 +1,65 @@
-import api from "../config/api";
+import firestore from '@react-native-firebase/firestore';
 
-// Add or update cart item (quantity change or notes update)
 export const addToCart = async (cartData) => {
   try {
-    /**
-     cartData must include:
-     - customer_id
-     - user_id
-     - product_id
-     - restaurant_id
-     - product_name
-     - product_price
-     - product_tax
-     - product_quantity  (delta: +1, -1)
-     - textfield (notes)
-    */
-
-    const res = await api.post("/cart/add", cartData);
-    if (res && res.data) return res.data;
-
-    return { status: 0, message: "Unknown API error" };
+    const custId = String(cartData.customer_id);
+    const cartRef = firestore().collection('carts');
+    const snapshot = await cartRef
+      .where('customer_id', '==', custId)
+      .where('product_id', '==', String(cartData.product_id))
+      .where('textfield', '==', cartData.textfield || "")
+      .get();
+      
+    if (!snapshot.empty) {
+      // Update quantity
+      const docId = snapshot.docs[0].id;
+      const currentQty = snapshot.docs[0].data().product_quantity;
+      const newQty = currentQty + cartData.product_quantity;
+      
+      if (newQty <= 0) {
+        await cartRef.doc(docId).delete();
+      } else {
+        await cartRef.doc(docId).update({ product_quantity: newQty });
+      }
+    } else {
+      // Add new item if delta is positive
+      if (cartData.product_quantity > 0) {
+        await cartRef.add({
+          ...cartData,
+          customer_id: custId,
+          product_id: String(cartData.product_id),
+          created_at: firestore.FieldValue.serverTimestamp()
+        });
+      }
+    }
+    return { status: 1, message: "Cart updated" };
   } catch (err) {
-    console.log("Add to Cart Error:", err.response?.data || err.message || err);
-    return { status: 0, message: "API Error" };
+    console.log("Add to Cart Error:", err);
+    return { status: 0, message: "Firestore Error" };
   }
 };
 
-// Get full cart for a user
 export const getCart = async (customerId) => {
   try {
-    const res = await api.get(`/cart?customer_id=${customerId}`);
-    if (res && res.data) return res.data;
-
-    return { status: 0, data: [] };
+    const snapshot = await firestore()
+      .collection('carts')
+      .where('customer_id', '==', String(customerId))
+      .get();
+      
+    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return { status: 1, data };
   } catch (err) {
-    console.log("Get Cart Error:", err.response?.data || err.message || err);
+    console.log("Get Cart Error:", err);
     return { status: 0, data: [] };
   }
 };
 
-// Remove item from cart
 export const removeFromCart = async (cartId) => {
   try {
-    const res = await api.post("/cart/remove", { id: cartId });
-    if (res && res.data) return res.data;
-
-    return { status: 0, message: "Unknown API error" };
+    await firestore().collection('carts').doc(cartId).delete();
+    return { status: 1, message: "Item removed" };
   } catch (err) {
-    console.log("Remove Cart Error:", err.response?.data || err.message || err);
-    return { status: 0, message: "API Error" };
+    console.log("Remove Cart Error:", err);
+    return { status: 0, message: "Firestore Error" };
   }
 };

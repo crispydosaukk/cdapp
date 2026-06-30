@@ -8,7 +8,8 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StripeProvider } from "@stripe/stripe-react-native";
 import { STRIPE_PUBLISHABLE_KEY } from "@env";
-import api from "./config/api";
+import { saveFcmToken } from "./services/notificationService";
+import auth from '@react-native-firebase/auth';
 
 import SplashScreen from "./screens/SplashScreen.jsx";
 import HomeScreen from "./screens/HomeScreen.jsx";
@@ -99,11 +100,14 @@ export default function App() {
       try {
         // console.log("🔁 FCM TOKEN REFRESHED:", token);
 
-        await api.post("/mobile/save-fcm-token", {
-          fcm_token: token,
-          user_type: "customer",
-          device_type: Platform.OS
-        });
+        const user = auth().currentUser;
+        if (user) {
+          await saveFcmToken({
+            userType: "customer",
+            userId: user.uid,
+            token
+          });
+        }
       } catch (err) {
         console.log("❌ Token refresh save failed", err);
       }
@@ -161,7 +165,7 @@ export default function App() {
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Signup" component={SignupScreen} />
             <Stack.Screen name="Credits" component={Credits} />
-            <Stack.Screen name="Profile" component={Profile} />
+            <Stack.Screen name="Profile" component={Profile} options={{ animation: 'none' }} />
             <Stack.Screen name="PaymentHistory" component={PaymentHistory} />
             <Stack.Screen name="FAQ" component={FAQ} />
             <Stack.Screen name="InviteFriends" component={InviteFriends} />

@@ -29,12 +29,13 @@ import { createOrder } from "../services/orderService";
 import { getWalletSummary } from "../services/walletService";
 import { useStripe } from "@stripe/stripe-react-native";
 import { fetchStripeKey } from "../services/restaurantService";
-import { API_BASE_URL } from "../config/baseURL";
+
 
 const { width, height } = Dimensions.get("window");
 const scale = width / 400;
 
 const AnimatedView = Animated.createAnimatedComponent(View);
+import functions from '@react-native-firebase/functions';
 
 export default function CheckoutScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -259,17 +260,13 @@ export default function CheckoutScreen({ navigation }) {
       const restaurantId = cart[0]?.restaurant_id || cart[0]?.user_id;
       if (!restaurantId) return;
 
-      const res = await fetch(`${API_BASE_URL}/stripe/create-payment-intent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount,
-          currency: "gbp",
-          restaurant_id: restaurantId
-        }),
+      const res = await functions().httpsCallable('createPaymentIntent')({
+        amount,
+        currency: "gbp",
+        restaurant_id: restaurantId
       });
 
-      const data = await res.json();
+      const data = res.data;
       if (data.clientSecret) {
         setPaymentIntent(data);
         await initPaymentSheet({
@@ -337,16 +334,12 @@ export default function CheckoutScreen({ navigation }) {
         const amount = getFinalTotal();
         const restaurantId = cart[0]?.restaurant_id || cart[0]?.user_id;
 
-        const res = await fetch(`${API_BASE_URL}/stripe/create-payment-intent`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            amount,
-            currency: "gbp",
-            restaurant_id: restaurantId
-          }),
+        const res = await functions().httpsCallable('createPaymentIntent')({
+          amount,
+          currency: "gbp",
+          restaurant_id: restaurantId
         });
-        activeIntent = await res.json();
+        activeIntent = res.data;
         if (!activeIntent.clientSecret) {
           showPremiumAlert("Payment Error", activeIntent.message || "Payment initialization failed. Please try again.", "error");
           setProcessingPayment(false);
@@ -365,9 +358,14 @@ export default function CheckoutScreen({ navigation }) {
         return;
       }
 
+      const restaurantId = cart[0]?.restaurant_id || cart[0]?.user_id;
+
       const payload = {
-        user_id: user.id,
-        customer_id: user.customer_id ?? user.id,
+        user_id: String(restaurantId), // this must be the restaurant ID!
+        customer_id: String(user.customer_id ?? user.id),
+        customer_name: user.full_name || "",
+        customer_email: user.email || "",
+        customer_phone: user.mobile_number || "",
         payment_mode: 1,
         payment_request_id: activeIntent.payment_intent_id,
         instore: deliveryMethod === "instore" ? 1 : 0,
@@ -378,6 +376,8 @@ export default function CheckoutScreen({ navigation }) {
         mobile_number: user.mobile_number || "",
         wallet_used: useWallet ? walletUsed : 0,
         loyalty_used: useLoyalty ? loyaltyUsed : 0,
+        total_amount: getCartTotal(),
+        grand_total: getFinalTotal(),
         items: (visibleCart || []).map((i) => ({
           product_id: i.product_id,
           product_name: i.product_name,

@@ -35,7 +35,7 @@ react {
 /**
  * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
  */
-def enableProguardInReleaseBuilds = false
+def enableProguardInReleaseBuilds = true
 
 /**
  * Preferred JSC flavor
@@ -53,8 +53,8 @@ namespace "com.crispydosa.app"
         applicationId "com.crispydosa.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode 5
+        versionName "2.1.1"
     }
 
     signingConfigs {

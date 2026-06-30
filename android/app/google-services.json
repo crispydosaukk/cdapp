@@ -1,32 +1,13 @@
 {
   "project_info": {
-    "project_number": "6604989866",
-    "project_id": "crispydosa-notifications",
-    "storage_bucket": "crispydosa-notifications.firebasestorage.app"
+    "project_number": "860921857629",
+    "project_id": "crispydosa-app",
+    "storage_bucket": "crispydosa-app.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:6604989866:android:041cbba2dc614a176137d3",
-        "android_client_info": {
-          "package_name": "com.crispydosa"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyCUsFNCP5Mg7GFIoTdQqKEOkrfqxLU8wE4"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:6604989866:android:ca9ce374e04c5f626137d3",
+        "mobilesdk_app_id": "1:860921857629:android:af473f125fe74eb521afb4",
         "android_client_info": {
           "package_name": "com.crispydosa.app"
         }
@@ -34,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyCUsFNCP5Mg7GFIoTdQqKEOkrfqxLU8wE4"
+          "current_key": "AIzaSyBH-Pani1d5hfiQnRNYwn6hLOMtWhS-FBw"
         }
       ],
       "services": {

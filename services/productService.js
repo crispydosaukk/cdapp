@@ -1,33 +1,37 @@
-import api from "../config/api";
+import firestore from '@react-native-firebase/firestore';
 
 export const fetchProducts = async (userId, categoryId) => {
   try {
-    const res = await api.get(`/products?user_id=${userId}&cat_id=${categoryId}`);
+    const snapshot = await firestore()
+      .collection('products')
+      .where('user_id', 'in', [Number(userId), String(userId)])
+      .where('cat_id', '==', String(categoryId))
+      .get();
 
-    if (res.data.status === 1) {
-      return res.data.data
-        .map(product => {
-          // Robust parsing for 'contains' field matching dashboard logic
+    if (!snapshot.empty) {
+      return snapshot.docs
+        .map(doc => {
+          const product = doc.data();
           let c = product.contains;
           try {
             if (typeof c === 'string') c = JSON.parse(c);
-            if (typeof c === 'string') c = JSON.parse(c); // Handle double-serialization
-          } catch (e) {
-            console.warn("Error parsing product contains:", e);
-          }
+            if (typeof c === 'string') c = JSON.parse(c); 
+          } catch (e) {}
 
           return {
+            id: doc.id,
             ...product,
+            name: product.product_name,
             contains: Array.isArray(c) ? c : [],
             restaurantId: product.user_id,
+            sort_order: Number(product.sort_order || 0)
           };
         })
-        .sort((a, b) => a.sort_order - b.sort_order);  // 🟢 IMPORTANT
+        .sort((a, b) => a.sort_order - b.sort_order);
     }
-
     return [];
   } catch (err) {
-    console.log("Product Service Error:", err.response?.data || err);
+    console.log("Product Firestore Error:", err);
     return [];
   }
 };

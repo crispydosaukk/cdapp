@@ -44,9 +44,7 @@ export default function Profile({ navigation }) {
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const [orderCount, setOrderCount] = useState(0);
 
-  // Animation values
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
+
 
   // Premium Alert State
   const [alertVisible, setAlertVisible] = useState(false);
@@ -81,7 +79,6 @@ export default function Profile({ navigation }) {
           setProfile(JSON.parse(cachedProfile));
           setWallet(JSON.parse(cachedWallet));
           setLoading(false);
-          startAnimations();
         }
 
         // Fetch fresh
@@ -104,7 +101,6 @@ export default function Profile({ navigation }) {
           setOrderCount(list.length);
         }
         setLoading(false);
-        startAnimations();
       } catch (err) {
         console.log("Profile error", err);
         setLoading(false);
@@ -129,12 +125,7 @@ export default function Profile({ navigation }) {
     })();
   }, [userLocal, isFocused]);
 
-  const startAnimations = () => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 800, useNativeDriver: true }),
-    ]).start();
-  };
+
 
   const showPremiumAlert = (title, msg, type = "info") => {
     setAlertTitle(title);
@@ -251,7 +242,7 @@ export default function Profile({ navigation }) {
         contentContainerStyle={{ paddingBottom: 20, paddingTop: insets.top }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />}
       >
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+        <View>
           {/* PREMIUM HEADER CARD */}
           <LinearGradient colors={["#1D976C", "#93F9B9"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.profileHeader}>
             <View style={styles.headerContent}>
@@ -343,9 +334,9 @@ export default function Profile({ navigation }) {
             </LinearGradient>
           </TouchableOpacity>
 
-          <Text style={styles.versionText}>Crispy Dosa Business v2.0.1</Text>
+          <Text style={styles.versionText}>Crispy Dosa v1.1.0</Text>
 
-        </Animated.View>
+        </View>
       </ScrollView>
 
       <BottomBar navigation={navigation} />

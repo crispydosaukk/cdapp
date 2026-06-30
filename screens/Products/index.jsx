@@ -836,9 +836,27 @@ export default function Products({ route, navigation }) {
                   )}
                 </View>
                 <TouchableOpacity
-                  onPress={() => {
+                  onPress={async () => {
                     setPopupVisible(false);
                     setPopupTargetIds(null);
+                    // Sync pending item to server if they close without clicking Add
+                    if (pending[currentProduct?.id]) {
+                      await addToCart({
+                        customer_id: user.id,
+                        user_id: currentProduct.user_id,
+                        product_id: currentProduct.id,
+                        product_name: currentProduct.name,
+                        product_price: currentProduct.price,
+                        product_tax: 0,
+                        product_quantity: cartItems[currentProduct.id],
+                        textfield: noteInput || "",
+                      });
+                      setPending((s) => {
+                        const n = { ...s };
+                        delete n[currentProduct.id];
+                        return n;
+                      });
+                    }
                   }}
                   style={styles.popupCloseBtn}
                 >

@@ -1,25 +1,29 @@
-import api, { IMAGE_BASE_URL } from "../config/api";
+import firestore from '@react-native-firebase/firestore';
 
 export const fetchCategories = async (userId) => {
   try {
-    const res = await api.get(`/categories?user_id=${userId}`);
-
-    if (res.data.status === 1) {
-      return res.data.data
-        .map(cat => ({
-          id: cat.id,
-          userId: cat.user_id,
-          name: cat.name,
-          image: cat.image,
-          sort_order: cat.sort_order
-        }))
-        .sort((a, b) => a.sort_order - b.sort_order);  // <--- IMPORTANT
+    const snapshot = await firestore()
+      .collection('categories')
+      .where('user_id', 'in', [Number(userId), String(userId)])
+      .get();
+      
+    if (!snapshot.empty) {
+      return snapshot.docs
+        .map(doc => {
+          const cat = doc.data();
+          return {
+            id: doc.id,
+            userId: cat.user_id,
+            name: cat.name,
+            image: cat.category_image || cat.image,
+            sort_order: Number(cat.sort_order || 0)
+          };
+        })
+        .sort((a, b) => a.sort_order - b.sort_order);
     }
-
     return [];
   } catch (error) {
-    console.error("Category API Error:", error.response?.data || error);
+    console.error("Category Firestore Error:", error);
     return [];
   }
 };
-

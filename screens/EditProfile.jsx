@@ -15,7 +15,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Picker } from "@react-native-picker/picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import api from "../config/api";
+import { fetchProfile, updateProfileData } from "../services/profileService";
 import { fetchRestaurants } from "../services/restaurantService";
 
 export default function EditProfile({ navigation }) {
@@ -52,14 +52,14 @@ export default function EditProfile({ navigation }) {
 
   const loadProfile = async () => {
     try {
-      const res = await api.get("/profile");
+      const data = await fetchProfile();
       setForm({
-        full_name: res.data.full_name || "",
-        email: res.data.email || "",
-        mobile_number: res.data.mobile_number || "",
-        gender: res.data.gender || "",
-        date_of_birth: res.data.date_of_birth || "",
-        preferred_restaurant: res.data.preferred_restaurant || "",
+        full_name: data.full_name || "",
+        email: data.email || "",
+        mobile_number: data.mobile_number || "",
+        gender: data.gender || "",
+        date_of_birth: data.date_of_birth || "",
+        preferred_restaurant: data.preferred_restaurant || "",
       });
     } catch (err) {
       Alert.alert("Error", "Unable to load profile");
@@ -77,7 +77,7 @@ export default function EditProfile({ navigation }) {
     try {
       setSaving(true);
 
-      await api.put("/profile", {
+      await updateProfileData({
         full_name: form.full_name,
         gender: form.gender,
         date_of_birth: form.date_of_birth,

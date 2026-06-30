@@ -1,71 +1,64 @@
-// restaurantService.js
-import api from "../config/api";
+import firestore from '@react-native-firebase/firestore';
 
-// Fetch all restaurants
 export const fetchRestaurants = async (lat, lng) => {
   try {
-    let url = "/restaurants";
-    if (lat && lng) {
-      url += `?lat=${lat}&lng=${lng}`;
-    }
-    const res = await api.get(url);
-    if (res.data.status === 1) {
-      return res.data.data.map(r => ({
-        id: r.id,
-        userId: r.userid,
-        name: r.name,
-        address: r.address,
-        photo: r.photo,
-        instore: r.instore,
-        kerbside: r.kerbside,
-        distance: r.distance,
+    const snapshot = await firestore().collection('restaurant').get();
+    
+    if (!snapshot.empty) {
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        userId: doc.data().user_id || doc.id,
+        name: doc.data().restaurant_name || doc.data().name || "Crispy Dosa",
+        address: doc.data().restaurant_address || doc.data().address || "",
+        photo: doc.data().restaurant_photo || doc.data().photo || "",
+        instore: doc.data().instore || 0,
+        kerbside: doc.data().kerbside || 0,
+        distance: 0,
       }));
     }
     return [];
   } catch (error) {
-    console.error("Restaurant API Error:", error.response?.data || error.message);
+    console.error("Restaurant API Error:", error);
     return [];
   }
 };
 
-// Fetch single restaurant by userId
 export const fetchRestaurantDetails = async (userId) => {
   try {
-    const res = await api.get(`/restaurant/${userId}`);
-    if (res.data.status === 1 && res.data.data.length > 0) {
-      // restaurant_photo here is already a full URL
-      return res.data.data[0];
+    const doc = await firestore().collection('restaurant').doc(String(userId)).get();
+    if (doc.exists) {
+      return { id: doc.id, ...doc.data() };
     }
     return null;
   } catch (error) {
-    console.error("Restaurant Details API Error:", error.response?.data || error.message);
+    console.error("Restaurant Details API Error:", error);
     return null;
   }
 };
 
 export const fetchRestaurantTimings = async (restaurantId) => {
   try {
-    const res = await api.get(`/restaurant-timings/${restaurantId}`);
-    if (res.data.status === 1) {
-      return res.data.data; // array of timings
+    // Assuming timings are stored in a subcollection or field
+    const doc = await firestore().collection('restaurant').doc(String(restaurantId)).get();
+    if (doc.exists && doc.data().timings) {
+      return doc.data().timings;
     }
     return [];
   } catch (error) {
-    console.error("Fetch Timings Error:", error.response?.data || error.message);
+    console.error("Fetch Timings Error:", error);
     return [];
   }
 };
 
-// Fetch Dynamic Stripe Key for Mobile
 export const fetchStripeKey = async (restaurantId) => {
   try {
-    const res = await api.get(`/stripe/restaurant-key?restaurant_id=${restaurantId}`);
-    if (res.data.status === 1) {
-      return res.data.publishableKey;
+    const doc = await firestore().collection('restaurant').doc(String(restaurantId)).get();
+    if (doc.exists && doc.data().stripe_publishable_key) {
+      return doc.data().stripe_publishable_key;
     }
     return null;
   } catch (error) {
-    console.error("Fetch Stripe Key Error:", error.response?.data || error.message);
+    console.error("Fetch Stripe Key Error:", error);
     return null;
   }
 };

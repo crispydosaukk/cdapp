@@ -1,32 +1,51 @@
-import api from "../config/api";
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // 🔹 Login User
 export const loginUser = async (email, password) => {
   try {
-    const res = await api.post("/login", { email, password });
-    const { token, user } = res.data;
+    const userCredential = await auth().signInWithEmailAndPassword(email, password);
+    const firebaseUser = userCredential.user;
 
-    // Save token for future requests
+    // Fetch the customer's full profile from Firestore
+    const userDoc = await firestore().collection('customers').doc(firebaseUser.uid).get();
+    
+    if (!userDoc.exists) {
+      throw new Error("Customer profile not found in database.");
+    }
+
+    const userData = { id: firebaseUser.uid, ...userDoc.data() };
+    const token = await firebaseUser.getIdToken();
+
+    // Save token and user info for app state
     await AsyncStorage.setItem("token", token);
+    await AsyncStorage.setItem("user", JSON.stringify(userData));
 
-    // Save user info for dynamic customer_id
-    await AsyncStorage.setItem("user", JSON.stringify(user)); // ✅ crucial
-
-    return { user, token };
+    return { user: userData, token };
   } catch (error) {
-    console.log("Login error:", error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || "Login failed");
+    console.log("Login error:", error.message);
+    throw new Error(error.message || "Login failed");
   }
 };
 
-
+// 🔹 Register User
 export const registerUser = async (data) => {
   try {
-    const res = await api.post("/register", data); // 👈 changed from /signup
-    return res.data;
+    const { email, password, full_name, mobile_number } = data;
+    
+    // Create the user in Firebase Auth
+    const userCredential = await auth().createUserWithEmailAndPassword(email, password);
+    
+    // Note: Our Dashboard's Cloud Function (onCustomerCreated) will automatically 
+    // detect this new user, create their Firestore document, and give them a referral code!
+    
+    // We can optionally update their display name immediately
+    await userCredential.user.updateProfile({ displayName: full_name });
+
+    return { status: 1, message: "Account created successfully!" };
   } catch (error) {
-    console.log("Register error:", error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || "Signup failed");
+    console.log("Register error:", error.message);
+    throw new Error(error.message || "Signup failed");
   }
 };
