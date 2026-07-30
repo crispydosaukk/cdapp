@@ -53,8 +53,8 @@ namespace "com.crispydosa.app"
         applicationId "com.crispydosa.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 5
-        versionName "2.1.1"
+        versionCode 6
+        versionName "2.1.2"
     }
 
     signingConfigs {

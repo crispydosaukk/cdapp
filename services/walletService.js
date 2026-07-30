@@ -9,23 +9,26 @@ export const getWalletSummary = async () => {
     const doc = await firestore().collection('customers').doc(user.uid).get();
     const data = doc.data() || {};
     
-    // Also fetch transaction history
+    // Also fetch transaction history (sorted locally to avoid requiring composite index)
     const historySnap = await firestore()
       .collection('wallet_transactions')
       .where('customer_id', '==', user.uid)
-      .orderBy('created_at', 'desc')
       .get();
       
     const history = historySnap.docs.map(d => {
       const hd = d.data();
       const isDebit = hd.type === "debit";
+      const formattedAmount = Number(hd.amount || 0).toFixed(2);
       return { 
         id: d.id, 
         ...hd,
-        created_at: hd.created_at?.toDate ? hd.created_at.toDate().toLocaleString() : hd.created_at,
-        amount: isDebit ? `-${hd.amount}` : `+${hd.amount}`
+        raw_date: hd.created_at?.toDate ? hd.created_at.toDate() : new Date(hd.created_at || 0),
+        created_at: hd.created_at?.toDate 
+          ? hd.created_at.toDate().toLocaleString('en-US', { hour12: true, year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric' }) 
+          : hd.created_at,
+        amount: isDebit ? `-£${formattedAmount}` : `+£${formattedAmount}`
       };
-    });
+    }).sort((a, b) => b.raw_date - a.raw_date);
 
     return {
       wallet_balance: data.wallet_balance || 0,

@@ -21,7 +21,7 @@ export const fetchProducts = async (userId, categoryId) => {
           return {
             id: doc.id,
             ...product,
-            name: product.product_name,
+            name: product.name || product.product_name || "Unknown Product",
             contains: Array.isArray(c) ? c : [],
             restaurantId: product.user_id,
             sort_order: Number(product.sort_order || 0)
