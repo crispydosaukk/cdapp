@@ -741,7 +741,9 @@ export default function Products({ route, navigation }) {
 
       {/* List */}
       {loading ? (
-        <ActivityIndicator size="large" style={{ marginTop: 24 }} />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#16a34a" />
+        </View>
       ) : (
         <View style={{ flex: 1 }}>
           <FlatList

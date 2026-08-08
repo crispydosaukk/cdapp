@@ -18,7 +18,7 @@ import LinearGradient from "react-native-linear-gradient";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { loginUser } from "../services/authService";
+import { checkPhoneNumberExists, sendMsg91Otp, verifyMsg91Otp, loginUserWithPhone } from "../services/authService";
 import messaging from "@react-native-firebase/messaging";
 import { saveFcmToken } from "../services/notificationService";
 
@@ -26,24 +26,35 @@ const { width } = Dimensions.get("window");
 const scale = width / 400;
 
 export default function LoginScreen({ navigation }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
+  const [showOtp, setShowOtp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [successVisible, setSuccessVisible] = useState(false);
   const [fullName, setFullName] = useState("");
   const scaleAnim = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    if (otp.length === 4 && !loading) {
+      handleVerifyOtp();
+    }
+  }, [otp]);
 
   // Premium Alert State
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState("");
   const [alertMsg, setAlertMsg] = useState("");
   const [alertType, setAlertType] = useState("info");
+  const [alertBtnText, setAlertBtnText] = useState("Ok");
+  const [alertAction, setAlertAction] = useState(null);
   const alertScale = React.useRef(new Animated.Value(0)).current;
 
-  const showPremiumAlert = (title, msg, type = "info") => {
+  const showPremiumAlert = (title, msg, type = "info", btnText = "Ok", action = null) => {
     setAlertTitle(title);
     setAlertMsg(msg);
     setAlertType(type);
+    setAlertBtnText(btnText);
+    setAlertAction(() => action);
     setAlertVisible(true);
     Animated.spring(alertScale, {
       toValue: 1,
@@ -61,46 +72,83 @@ export default function LoginScreen({ navigation }) {
     }).start(() => setAlertVisible(false));
   };
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      showPremiumAlert("Error", "Please enter Email / Mobile Number and Password", "error");
+  const handleContinue = async () => {
+    if (!phone) {
+      showPremiumAlert("Error", "Please enter your Mobile Number", "error");
       return;
     }
-
-    // 🔥 Detect if input is valid email or mobile number
-    const trimmed = email.trim();
-    const isMobile = /^[0-9]{8,15}$/.test(trimmed);
-    const isEmailFormat = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
-
-    if (!isMobile && !isEmailFormat) {
-      showPremiumAlert("Invalid Input", "Please enter a valid Email or Mobile Number", "error");
+    
+    let userPhone = phone.trim();
+    if (userPhone.startsWith('0')) {
+      userPhone = userPhone.substring(1);
+    }
+    const cleanPhone = `+44${userPhone}`;
+    if (userPhone.length !== 10) {
+      showPremiumAlert("Invalid Input", "Please enter a valid UK Mobile Number", "error");
       return;
     }
 
     setLoading(true);
     try {
-      const { user, token } = await loginUser(trimmed, password);
+      const check = await checkPhoneNumberExists(cleanPhone);
+      if (!check.exists) {
+        setLoading(false);
+        showPremiumAlert(
+          "Account Not Found",
+          "You don't have an account. Please create an account to continue.",
+          "info",
+          "Create Account",
+          () => navigation.navigate("Signup", { phoneNumber: cleanPhone })
+        );
+        return;
+      }
+      
+      await sendMsg91Otp(cleanPhone);
+      setShowOtp(true);
+      setLoading(false);
+    } catch (e) {
+      setLoading(false);
+      if (e.message === "Could not verify phone number.") {
+        showPremiumAlert("Firebase Permission Denied", "Cannot access the database. Please update your Firestore Security Rules to allow reads on the 'customers' collection.", "error");
+      } else {
+        showPremiumAlert("Error", e.message, "error");
+      }
+    }
+  };
 
-      await AsyncStorage.setItem("token", token);
-      await AsyncStorage.setItem("user", JSON.stringify(user));
+  const handleVerifyOtp = async () => {
+    if (!otp) {
+      showPremiumAlert("Error", "Please enter the OTP", "error");
+      return;
+    }
+    
+    let userPhone = phone.trim();
+    if (userPhone.startsWith('0')) {
+      userPhone = userPhone.substring(1);
+    }
+    const cleanPhone = `+44${userPhone}`;
+
+    setLoading(true);
+    try {
+      await verifyMsg91Otp(cleanPhone, otp.trim());
+      
+      const { user } = await loginUserWithPhone(cleanPhone);
 
       /* =======================
         🔔 STEP 6.3 – FCM TOKEN
       ======================= */
-      const fcmToken = await messaging().getToken();
-      // console.log("🔥 CUSTOMER FCM TOKEN:", fcmToken);
-
-      if (fcmToken && user?.id) {
-        await saveFcmToken({
-          userType: "customer",
-          userId: user.id,
-          token: fcmToken
-        });
-      }
+      messaging().getToken().then(fcmToken => {
+        if (fcmToken && user?.id) {
+          saveFcmToken({
+            userType: "customer",
+            userId: user.id,
+            token: fcmToken
+          }).catch(console.log);
+        }
+      }).catch(err => console.log("FCM Token fetch failed:", err));
       /* ======================= */
 
-
-      setFullName(user.full_name);
+      setFullName(user.full_name || "Guest");
       setSuccessVisible(true);
 
       Animated.spring(scaleAnim, {
@@ -149,75 +197,90 @@ export default function LoginScreen({ navigation }) {
             <Text style={styles.title}>Hello 👋</Text>
             <Text style={styles.subtitle}>Sign in to your account</Text>
 
-            {/* Email / Mobile */}
-            <View style={styles.box}>
-              <Text style={styles.label}>Email or Mobile Number</Text>
-              <View style={styles.inputRow}>
-                <Ionicons name="person-outline" size={20} color="#1f4d35" />
-                <TextInput
-                  placeholder="Enter email or mobile number"
-                  placeholderTextColor="#88a796"
-                  autoCapitalize="none"
-                  keyboardType="default"
-                  value={email}
-                  onChangeText={setEmail}
-                  style={styles.input}
-                />
-              </View>
+            {!showOtp ? (
+              <>
+                <View style={styles.box}>
+                  <Text style={styles.label}>Mobile Number</Text>
+                  <View style={styles.inputRow}>
+                    <Ionicons name="call-outline" size={20} color="#1f4d35" />
+                    <Text style={{ fontSize: 15, color: '#1f4d35', marginLeft: 8, fontWeight: 'bold' }}>🇬🇧 +44</Text>
+                    <TextInput
+                      placeholder="Enter mobile number"
+                      placeholderTextColor="#88a796"
+                      keyboardType="phone-pad"
+                      value={phone}
+                      onChangeText={setPhone}
+                      style={styles.input}
+                      maxLength={11}
+                    />
+                  </View>
+                  <Text style={styles.helperText}>
+                    We will send an OTP to verify your number.
+                  </Text>
+                </View>
 
-              <Text style={styles.helperText}>
-                You can login using your Email or Mobile Number.
-              </Text>
-            </View>
+                <TouchableOpacity style={styles.loginBtn} onPress={handleContinue}>
+                  <LinearGradient
+                    colors={["#1a8b50", "#21a863", "#34c87c"]}
+                    style={styles.loginGradient}
+                  >
+                    {loading ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={styles.loginText}>Continue</Text>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
 
-            {/* Password */}
-            <View style={styles.box}>
-              <Text style={styles.label}>Password</Text>
-              <View style={styles.inputRow}>
-                <Ionicons
-                  name="lock-closed-outline"
-                  size={20}
-                  color="#1f4d35"
-                />
-                <TextInput
-                  placeholder="Enter password"
-                  placeholderTextColor="#88a796"
-                  secureTextEntry
-                  value={password}
-                  onChangeText={setPassword}
-                  style={styles.input}
-                />
-              </View>
+                <Text style={styles.bottomText}>
+                  Don’t have an account?{" "}
+                  <Text
+                    style={styles.signup}
+                    onPress={() => navigation.navigate("Signup")}
+                  >
+                    Register Now
+                  </Text>
+                </Text>
+              </>
+            ) : (
+              <>
+                <View style={styles.box}>
+                  <Text style={styles.label}>Enter OTP</Text>
+                  <View style={styles.inputRow}>
+                    <Ionicons name="keypad-outline" size={20} color="#1f4d35" />
+                    <TextInput
+                      placeholder="Enter 4 digit OTP"
+                      placeholderTextColor="#88a796"
+                      keyboardType="number-pad"
+                      value={otp}
+                      onChangeText={setOtp}
+                      style={styles.input}
+                      maxLength={4}
+                    />
+                  </View>
+                  <TouchableOpacity style={styles.forgotBtn} onPress={() => setShowOtp(false)}>
+                    <Text style={styles.forgotText}>Change Mobile Number?</Text>
+                  </TouchableOpacity>
+                </View>
 
-              <TouchableOpacity style={styles.forgotBtn}>
-                <Text style={styles.forgotText}>Forgot Password?</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* LOGIN BUTTON */}
-            <TouchableOpacity style={styles.loginBtn} onPress={handleLogin}>
-              <LinearGradient
-                colors={["#1a8b50", "#21a863", "#34c87c"]}
-                style={styles.loginGradient}
-              >
-                {loading ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.loginText}>Login</Text>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
-
-            {/* Signup Link */}
-            <Text style={styles.bottomText}>
-              Don’t have an account?{" "}
-              <Text
-                style={styles.signup}
-                onPress={() => navigation.navigate("Signup")}
-              >
-                Register Now
-              </Text>
-            </Text>
+                <TouchableOpacity 
+                  style={styles.loginBtn} 
+                  onPress={handleVerifyOtp}
+                  disabled={otp.length !== 4 || loading}
+                >
+                  <LinearGradient
+                    colors={otp.length === 4 ? ["#1a8b50", "#21a863", "#34c87c"] : ["#94A3B8", "#64748B"]}
+                    style={styles.loginGradient}
+                  >
+                    {loading ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={styles.loginText}>Verify & Login</Text>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
 
           {/* BOTTOM GREEN WAVE */}
@@ -278,12 +341,17 @@ export default function LoginScreen({ navigation }) {
               </View>
               <Text style={styles.alertTitleText}>{alertTitle}</Text>
               <Text style={styles.alertMsgText}>{alertMsg}</Text>
-              <TouchableOpacity style={styles.alertBtn} onPress={hidePremiumAlert}>
+              <TouchableOpacity style={styles.alertBtn} onPress={() => {
+                hidePremiumAlert();
+                if (alertAction) {
+                  setTimeout(alertAction, 300);
+                }
+              }}>
                 <LinearGradient
                   colors={alertType === 'error' ? ["#EF4444", "#DC2626"] : ["#16A34A", "#15803D"]}
                   style={styles.alertBtnGrad}
                 >
-                  <Text style={styles.alertBtnText}>Ok</Text>
+                  <Text style={styles.alertBtnText}>{alertBtnText}</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </LinearGradient>

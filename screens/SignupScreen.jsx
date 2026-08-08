@@ -18,7 +18,6 @@ import {
 } from "react-native";
 import LinearGradient from "react-native-linear-gradient";
 import Ionicons from "react-native-vector-icons/Ionicons";
-import CountryPicker from "react-native-country-picker-modal";
 import { Picker } from "@react-native-picker/picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import {
@@ -36,13 +35,9 @@ const scale = width / 400;
 export default function SignupScreen({ navigation }) {
   const insets = useSafeAreaInsets();
 
-  const [countryCode, setCountryCode] = useState("GB");
-  const [callingCode, setCallingCode] = useState("44");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [preferredRestaurant, setPreferredRestaurant] = useState("");
   const [dob, setDob] = useState(null);
   const [showDobPicker, setShowDobPicker] = useState(false);
@@ -79,6 +74,20 @@ export default function SignupScreen({ navigation }) {
       }
     };
     loadSettings();
+
+    // Pre-fill phone if coming from Login
+    if (navigation.getState().routes) {
+      const currentRoute = navigation.getState().routes.find(r => r.name === 'Signup');
+      if (currentRoute?.params?.phoneNumber) {
+        let incomingPhone = currentRoute.params.phoneNumber;
+        if (incomingPhone.startsWith('+44')) {
+          incomingPhone = incomingPhone.substring(3);
+        } else {
+          incomingPhone = incomingPhone.replace('+', '');
+        }
+        setPhone(incomingPhone);
+      }
+    }
   }, []);
 
   const offers = [
@@ -158,9 +167,6 @@ export default function SignupScreen({ navigation }) {
     if (!email.trim()) return "Email is required.";
     if (!emailRegex.test(email.trim())) return "Enter valid Gmail address (@gmail.com).";
     if (!phone.trim()) return "Phone number is required.";
-    if (!password.trim()) return "Password is required.";
-    if (password.length < 6) return "Password must be 6+ characters.";
-    if (password !== confirmPassword) return "Passwords do not match.";
     if (!preferredRestaurant) return "Select your preferred restaurant.";
     if (!dob) return "Please select your Date of Birth.";
     if (!termsAccepted) return "Please accept Terms & Conditions.";
@@ -192,14 +198,21 @@ export default function SignupScreen({ navigation }) {
     const err = validateForm();
     if (err) return showPremiumAlert("Required", err, "info");
 
+    let userPhone = phone.trim();
+    if (userPhone.startsWith('0')) {
+      userPhone = userPhone.substring(1);
+    }
+    if (userPhone.length !== 10) {
+      return showPremiumAlert("Invalid Input", "Please enter a valid UK Mobile Number", "error");
+    }
+
     setLoading(true);
     try {
       await registerUser({
         full_name: name.trim(),
         email: email.trim(),
-        mobile_number: phone.trim(),
-        country_code: `+${callingCode}`,
-        password,
+        mobile_number: `+44${userPhone}`,
+        country_code: `+44`,
         preferred_restaurant: preferredRestaurant,
         date_of_birth: dob ? dob.toISOString().split("T")[0] : null,
         referral_code: referralCode.trim() || null,
@@ -275,16 +288,7 @@ export default function SignupScreen({ navigation }) {
             <InputItem icon="mail-outline" placeholder="Gmail Address" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
 
             <View style={styles.phoneContainer}>
-              <CountryPicker
-                countryCode={countryCode}
-                withFlag
-                withCallingCode
-                onSelect={(c) => {
-                  setCountryCode(c.cca2);
-                  setCallingCode(c.callingCode[0]);
-                }}
-              />
-              <Text style={styles.callingCodeText}>+{callingCode}</Text>
+              <Text style={styles.callingCodeText}>🇬🇧 +44</Text>
               <TextInput
                 placeholder="Mobile Number"
                 placeholderTextColor="#94A3B8"
@@ -292,12 +296,9 @@ export default function SignupScreen({ navigation }) {
                 style={styles.phoneInput}
                 value={phone}
                 onChangeText={setPhone}
+                maxLength={11}
               />
             </View>
-
-            <InputItem icon="lock-closed-outline" placeholder="Password" value={password} onChangeText={setPassword} secureTextEntry />
-
-            <InputItem icon="lock-closed-outline" placeholder="Confirm Password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry />
 
             {/* RESTAURANT PICKER */}
             <View style={styles.pickerWrapper}>
@@ -368,8 +369,12 @@ export default function SignupScreen({ navigation }) {
             <TouchableOpacity
               style={styles.mainBtn}
               onPress={handleSignup}
+              disabled={!termsAccepted || loading}
             >
-              <LinearGradient colors={["#16a34a", "#15803d"]} style={styles.btnGradient}>
+              <LinearGradient 
+                colors={termsAccepted ? ["#16a34a", "#15803d"] : ["#94A3B8", "#64748B"]} 
+                style={styles.btnGradient}
+              >
                 {loading ? (
                   <ActivityIndicator size="small" color="#FFF" />
                 ) : (
