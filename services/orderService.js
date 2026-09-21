@@ -13,8 +13,44 @@ export const createOrder = async (orderData) => {
       created_at: firestore.FieldValue.serverTimestamp()
     });
     
-    // The Cloud Function (onOrderCreated) in the backend handles wallet deduction and loyalty generation automatically!
-    
+    // --- NEW LOGIC START --- (Moved from Cloud Functions)
+    try {
+      const settingsDoc = await firestore().collection('settings').doc('global').get();
+      let loyaltyPointsEarned = 0;
+      if (settingsDoc.exists) {
+        const s = settingsDoc.data() || {};
+        if (s.earn_per_order_amount) loyaltyPointsEarned = Number(s.earn_per_order_amount);
+      }
+
+      const walletDeducted = Number(orderData.wallet_used || 0);
+      const customerRef = firestore().collection('customers').doc(orderData.customer_id);
+
+      let updates = {};
+      if (loyaltyPointsEarned > 0) {
+        updates.loyalty_points = firestore.FieldValue.increment(loyaltyPointsEarned);
+      }
+      if (walletDeducted > 0) {
+        updates.wallet_balance = firestore.FieldValue.increment(-walletDeducted);
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await customerRef.update(updates);
+      }
+
+      if (walletDeducted > 0) {
+        await firestore().collection('wallet_transactions').add({
+          customer_id: orderData.customer_id,
+          amount: walletDeducted,
+          type: 'debit',
+          description: `Used in Order ${orderNumber}`,
+          created_at: firestore.FieldValue.serverTimestamp()
+        });
+      }
+    } catch (rewardErr) {
+      console.log("Error applying rewards/wallet:", rewardErr);
+    }
+    // --- NEW LOGIC END ---
+
     // Clear cart for this customer
     const cartSnapshot = await firestore()
       .collection('carts')

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from "react";
+﻿import React, { useEffect, useState, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { useIsFocused } from "@react-navigation/native";
 import LinearGradient from "react-native-linear-gradient";
+import Geolocation from "react-native-geolocation-service";
 import useRefresh from "../hooks/useRefresh";
 
 import AppHeader from "./AppHeader";
@@ -50,6 +51,11 @@ export default function CheckoutScreen({ navigation }) {
   const [kerbsideColor, setKerbsideColor] = useState("");
   const [kerbsideReg, setKerbsideReg] = useState("");
   const [allergyNote, setAllergyNote] = useState("");
+
+  // Home delivery state
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryCoords, setDeliveryCoords] = useState(null);
+  const [locationLoading, setLocationLoading] = useState(false);
 
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
@@ -369,6 +375,8 @@ export default function CheckoutScreen({ navigation }) {
         payment_mode: 1,
         payment_request_id: activeIntent.payment_intent_id,
         instore: deliveryMethod === "instore" ? 1 : 0,
+        order_type: deliveryMethod === "delivery" ? "delivery" : deliveryMethod === "instore" ? "takeaway" : "kerbside",
+        ...(deliveryMethod === "delivery" && { delivery_address: deliveryAddress, delivery_coords: deliveryCoords, delivery_status: "unassigned" }),
         allergy_note: allergyNote,
         car_color: kerbsideColor,
         reg_number: kerbsideReg,
@@ -434,6 +442,24 @@ export default function CheckoutScreen({ navigation }) {
     }
   };
 
+  const fetchCurrentLocation = () => {
+    setLocationLoading(true);
+    Geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setDeliveryCoords({ lat: latitude, lng: longitude });
+        try {
+          const r = await fetch("https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}", { headers: { 'Accept-Language': 'en' } });
+          const d = await r.json();
+          setDeliveryAddress(d.display_name || "${latitude.toFixed(5)}, ${longitude.toFixed(5)}");
+        } catch { setDeliveryAddress("${latitude.toFixed(5)}, ${longitude.toFixed(5)}"); }
+        setLocationLoading(false);
+      },
+      () => { setLocationLoading(false); showPremiumAlert('Location Error', 'Cannot get location. Type your address manually.', 'error'); },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+    );
+  };
+
   const { refreshing, onRefresh } = useRefresh(async () => {
     if (!user) return;
     const cid = user.id ?? user.customer_id;
@@ -488,10 +514,10 @@ export default function CheckoutScreen({ navigation }) {
             <View style={styles.serviceCompositeCard}>
               <View style={styles.serviceRow}>
                 <View style={styles.serviceIconFrame}>
-                  <Ionicons name={deliveryMethod === 'Kerbside' ? "car-sport" : "walk"} size={26} color="#FF2B5C" />
+                  <Ionicons name={deliveryMethod === 'delivery' ? "bicycle" : deliveryMethod === 'kerbside' ? "car-sport" : "walk"} size={26} color="#FF2B5C" />
                 </View>
                 <View style={{ flex: 1, marginLeft: 16 }}>
-                  <Text style={styles.serviceLabel}>{deliveryMethod === 'instore' ? "In-store Pickup" : "Kerbside Delivery"}</Text>
+                  <Text style={styles.serviceLabel}>{deliveryMethod === 'delivery' ? "Home Delivery" : deliveryMethod === 'instore' ? "Takeaway" : "Kerbside"}</Text>
                   <Text style={styles.serviceSub}>Estimated Prep: 20 - 25 Mins</Text>
                 </View>
                 <TouchableOpacity style={styles.changeBtn} onPress={() => { setDeliveryPopup(true); openSheet(); }}>
@@ -504,6 +530,13 @@ export default function CheckoutScreen({ navigation }) {
                   {kerbsideName ? <Text style={styles.kerbsideText}><Text style={{ fontWeight: '700', color: '#0F172A' }}>Car Name:</Text> {kerbsideName}</Text> : null}
                   {kerbsideColor ? <Text style={styles.kerbsideText}><Text style={{ fontWeight: '700', color: '#0F172A' }}>Color:</Text> {kerbsideColor}</Text> : null}
                   {kerbsideReg ? <Text style={styles.kerbsideText}><Text style={{ fontWeight: '700', color: '#0F172A' }}>Reg No:</Text> {kerbsideReg}</Text> : null}
+                </View>
+              )}
+
+              {(deliveryMethod === 'delivery' && deliveryAddress.trim()) && (
+                <View style={styles.deliveryAddressBar}>
+                  <Ionicons name="location" size={16} color="#2563EB" />
+                  <Text style={styles.deliveryAddressText} numberOfLines={2}>{deliveryAddress}</Text>
                 </View>
               )}
 
@@ -721,10 +754,27 @@ export default function CheckoutScreen({ navigation }) {
                   <Ionicons name="walk" size={26} color={deliveryMethod === 'instore' ? "#16a34a" : "#999"} />
                 </View>
                 <View style={{ flex: 1, marginLeft: 15 }}>
-                  <Text style={styles.optionTitle}>In-store Pickup</Text>
-                  <Text style={styles.optionSub}>You collect from our counter</Text>
+                  <Text style={styles.optionTitle}>Takeaway</Text>
+                  <Text style={styles.optionSub}>Collect from our counter</Text>
                 </View>
                 <Ionicons name={deliveryMethod === 'instore' ? "radio-button-on" : "radio-button-off"} size={22} color={deliveryMethod === 'instore' ? "#16a34a" : "#DDD"} />
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {/* Home Delivery */}
+            <TouchableOpacity activeOpacity={0.9} onPress={() => setDeliveryMethod("delivery")}>
+              <LinearGradient
+                colors={deliveryMethod === 'delivery' ? ["#EFF6FF", "#DBEAFE"] : ["#F8FAFC", "#F8FAFC"]}
+                style={[styles.optionCard, deliveryMethod === 'delivery' && styles.optionSelectedBlue]}
+              >
+                <View style={[styles.optionIconContainer, deliveryMethod === 'delivery' && { backgroundColor: '#EFF6FF' }]}>
+                  <Ionicons name="bicycle" size={26} color={deliveryMethod === 'delivery' ? "#2563EB" : "#999"} />
+                </View>
+                <View style={{ flex: 1, marginLeft: 15 }}>
+                  <Text style={styles.optionTitle}>Home Delivery</Text>
+                  <Text style={styles.optionSub}>Delivered to your address</Text>
+                </View>
+                <Ionicons name={deliveryMethod === 'delivery' ? "radio-button-on" : "radio-button-off"} size={22} color={deliveryMethod === 'delivery' ? "#2563EB" : "#DDD"} />
               </LinearGradient>
             </TouchableOpacity>
 
@@ -736,9 +786,35 @@ export default function CheckoutScreen({ navigation }) {
               </View>
             )}
 
+            {/* Home Delivery address input */}
+            {deliveryMethod === 'delivery' && (
+              <View style={styles.kerbsideFields}>
+                <TouchableOpacity style={styles.locationBtn} onPress={fetchCurrentLocation} disabled={locationLoading} activeOpacity={0.8}>
+                  <LinearGradient colors={['#2563EB', '#1D4ED8']} style={styles.locationBtnGrad}>
+                    {locationLoading ? (
+                      <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                      <Ionicons name="navigate" size={18} color="#FFF" />
+                    )}
+                    <Text style={styles.locationBtnText}>
+                      {locationLoading ? '  Fetching location...' : '  Use My Current Location'}
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                <TextInput
+                  style={[styles.kInput, { height: 90, textAlignVertical: 'top', paddingTop: 14 }]}
+                  placeholder="Or type your full delivery address..."
+                  value={deliveryAddress}
+                  onChangeText={setDeliveryAddress}
+                  placeholderTextColor="#BCBCBC"
+                  multiline
+                />
+              </View>
+            )}
+
             <TouchableOpacity
-              style={[styles.sheetActionBtn, !deliveryMethod && { opacity: 0.5 }]}
-              disabled={!deliveryMethod}
+              style={[styles.sheetActionBtn, (!deliveryMethod || (deliveryMethod === 'delivery' && !deliveryAddress.trim())) && { opacity: 0.5 }]}
+              disabled={!deliveryMethod || (deliveryMethod === 'delivery' && !deliveryAddress.trim())}
               onPress={() => {
                 closeSheet(() => {
                   setDeliveryPopup(false);
@@ -1104,6 +1180,12 @@ const styles = StyleSheet.create({
   optionSub: { fontSize: 13 * scale, fontFamily: 'PoppinsMedium', color: '#64748B', marginTop: 2 },
   kerbsideFields: { marginTop: 10, marginBottom: 20 },
   kInput: { backgroundColor: '#F8FAFC', padding: 16, borderRadius: 14, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0', fontFamily: 'PoppinsMedium', color: '#0F172A' },
+  optionSelectedBlue: { borderColor: '#2563EB', backgroundColor: '#EFF6FF' },
+  locationBtn: { marginBottom: 12, borderRadius: 14, overflow: 'hidden' },
+  locationBtnGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, paddingHorizontal: 20 },
+  locationBtnText: { color: '#FFF', fontFamily: 'PoppinsBold', fontSize: 14 * scale, fontWeight: '800' },
+  deliveryAddressBar: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#EFF6FF', marginTop: 14, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#BFDBFE' },
+  deliveryAddressText: { flex: 1, fontSize: 13 * scale, fontFamily: 'PoppinsMedium', color: '#1D4ED8', lineHeight: 20, marginLeft: 8 },
   sheetActionBtn: { marginTop: 10 },
   sheetActionGrad: { borderRadius: 18, paddingVertical: 18, alignItems: 'center' },
   sheetActionText: { color: '#FFF', fontSize: 16 * scale, fontFamily: 'PoppinsBold', fontWeight: '800' },

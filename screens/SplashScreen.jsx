@@ -91,6 +91,11 @@ export default function SplashScreen({ navigation }) {
 
     const timeout = setTimeout(async () => {
       try {
+        const deliveryPartner = await AsyncStorage.getItem("delivery_partner");
+        if (deliveryPartner) {
+          navigation.replace("DeliveryHome");
+          return;
+        }
         const token = await AsyncStorage.getItem("token");
         const user = await AsyncStorage.getItem("user");
         if (token && user) {

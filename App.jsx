@@ -32,6 +32,8 @@ import HelpCenter from "./screens/HelpCenter.jsx";
 import Notifications from "./screens/Notifications.jsx";
 import PrivacyPolicyScreen from "./screens/PrivacyPolicyScreen.jsx";
 import TermsConditionsScreen from "./screens/TermsConditionsScreen.jsx";
+import DeliveryLoginScreen from "./screens/DeliveryLoginScreen.jsx";
+import DeliveryHomeScreen from "./screens/DeliveryHomeScreen.jsx";
 
 const Stack = createNativeStackNavigator();
 
@@ -174,6 +176,8 @@ export default function App() {
             <Stack.Screen name="Notifications" component={Notifications} />
             <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
             <Stack.Screen name="TermsConditions" component={TermsConditionsScreen} />
+            <Stack.Screen name="DeliveryLogin" component={DeliveryLoginScreen} />
+            <Stack.Screen name="DeliveryHome" component={DeliveryHomeScreen} />
           </Stack.Navigator>
         </NavigationContainer>
       </SafeAreaProvider>

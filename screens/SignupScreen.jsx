@@ -198,10 +198,10 @@ export default function SignupScreen({ navigation }) {
     const err = validateForm();
     if (err) return showPremiumAlert("Required", err, "info");
 
-    let userPhone = phone.trim();
-    if (userPhone.startsWith('0')) {
-      userPhone = userPhone.substring(1);
-    }
+    let userPhone = phone.trim().replace(/\s+/g, '');
+    if (userPhone.startsWith('+44')) userPhone = userPhone.substring(3);
+    if (userPhone.startsWith('44')) userPhone = userPhone.substring(2);
+    if (userPhone.startsWith('0')) userPhone = userPhone.substring(1);
     if (userPhone.length !== 10) {
       return showPremiumAlert("Invalid Input", "Please enter a valid UK Mobile Number", "error");
     }
@@ -215,7 +215,7 @@ export default function SignupScreen({ navigation }) {
         country_code: `+44`,
         preferred_restaurant: preferredRestaurant,
         date_of_birth: dob ? dob.toISOString().split("T")[0] : null,
-        referral_code: referralCode.trim() || null,
+        referred_by: referralCode.trim() || null,
         gender: gender || null,
       });
 
@@ -392,6 +392,10 @@ export default function SignupScreen({ navigation }) {
             <Text style={styles.footerText}>Already have an account? <Text style={styles.footerLink}>Sign In</Text></Text>
           </TouchableOpacity>
 
+          <TouchableOpacity style={styles.deliveryPartnerFooter} onPress={() => navigation.navigate("DeliveryLogin")}>
+            <Text style={styles.deliveryPartnerText}>Delivery Partner? <Text style={styles.deliveryPartnerLink}>Sign In Here 🛵</Text></Text>
+          </TouchableOpacity>
+
         </ScrollView>
       </View>
 
@@ -439,7 +443,7 @@ export default function SignupScreen({ navigation }) {
               </Text>
               {settings && (
                 <Text style={{ color: "#FFF", fontFamily: "PoppinsBold", fontSize: 13 * scale, marginTop: 10 }}>
-                  Enjoy your £${Number(settings.signup_bonus_amount).toFixed(2)} Signup Bonus 🎁
+                  Enjoy your £{Number(settings.signup_bonus_amount).toFixed(2)} Signup Bonus 🎁
                 </Text>
               )}
             </LinearGradient>
@@ -630,6 +634,9 @@ const styles = StyleSheet.create({
   btnText: { color: "#FFF", fontSize: 16 * scale, fontFamily: "PoppinsBold", marginRight: 8 },
 
   footer: { marginTop: 20, alignItems: 'center' },
+  deliveryPartnerFooter: { marginTop: 14, marginBottom: 20, alignItems: 'center', backgroundColor: '#F0FDF4', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 20, alignSelf: 'center', borderWidth: 1, borderColor: '#DCFCE7' },
+  deliveryPartnerText: { fontSize: 13 * scale, color: '#475569', fontFamily: 'PoppinsBold' },
+  deliveryPartnerLink: { color: '#16a34a', fontWeight: '800' },
   footerText: { fontSize: 14 * scale, color: "#64748B" },
   footerLink: { color: "#16a34a", fontFamily: "PoppinsBold" },
 

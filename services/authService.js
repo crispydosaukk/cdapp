@@ -97,7 +97,7 @@ export const loginUser = async (email, password) => {
 
 export const registerUser = async (data) => {
   try {
-    const { email, full_name, mobile_number } = data;
+    const { email, full_name, mobile_number, referred_by } = data;
     const cleanPhone = mobile_number.replace('+', '');
     const dummyPassword = `Crispy@${cleanPhone}`;
     
@@ -105,11 +105,65 @@ export const registerUser = async (data) => {
     
     await userCredential.user.updateProfile({ displayName: full_name });
 
+    // Fetch settings for bonuses
+    const settingsDoc = await firestore().collection('settings').doc('global').get();
+    let signupBonus = 5.00;
+    let referralBonus = 0;
+    if (settingsDoc.exists) {
+      const s = settingsDoc.data() || {};
+      if (s.signup_bonus_amount) signupBonus = Number(s.signup_bonus_amount);
+      if (s.referral_bonus_amount) referralBonus = Number(s.referral_bonus_amount);
+    }
+
+    // Generate referral code
+    const myReferralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+    // Check if referred by someone
+    if (referred_by) {
+      const code = referred_by.toUpperCase();
+      try {
+        const referrerQuery = await firestore().collection('customers').where('referral_code', '==', code).get();
+        if (!referrerQuery.empty) {
+          const referrerDoc = referrerQuery.docs[0];
+          await referrerDoc.ref.update({
+            wallet_balance: firestore.FieldValue.increment(referralBonus),
+            referral_credits: firestore.FieldValue.increment(referralBonus),
+            friends_referred: firestore.FieldValue.increment(1)
+          });
+          
+          await firestore().collection('wallet_transactions').add({
+            customer_id: referrerDoc.id,
+            amount: referralBonus,
+            type: 'credit',
+            description: `Referral bonus for inviting ${data.full_name || 'a friend'}`,
+            created_at: firestore.FieldValue.serverTimestamp()
+          });
+        }
+      } catch (err) {
+        console.log("Error updating referrer:", err);
+      }
+    }
+
     // Save customer profile to Firestore so it can be found during login
     await firestore().collection('customers').doc(userCredential.user.uid).set({
       ...data,
+      referral_code: myReferralCode,
+      wallet_balance: signupBonus,
+      loyalty_points: 0,
+      referral_credits: 0,
+      friends_referred: 0,
       createdAt: firestore.FieldValue.serverTimestamp(),
     });
+
+    if (signupBonus > 0) {
+      await firestore().collection('wallet_transactions').add({
+        customer_id: userCredential.user.uid,
+        amount: signupBonus,
+        type: 'credit',
+        description: 'Signup bonus',
+        created_at: firestore.FieldValue.serverTimestamp()
+      });
+    }
 
     return { status: 1, message: "Account created successfully!" };
   } catch (error) {

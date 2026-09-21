@@ -78,10 +78,11 @@ export default function LoginScreen({ navigation }) {
       return;
     }
     
-    let userPhone = phone.trim();
-    if (userPhone.startsWith('0')) {
-      userPhone = userPhone.substring(1);
-    }
+    let userPhone = phone.trim().replace(/\s+/g, '');
+    if (userPhone.startsWith('+44')) userPhone = userPhone.substring(3);
+    if (userPhone.startsWith('44')) userPhone = userPhone.substring(2);
+    if (userPhone.startsWith('0')) userPhone = userPhone.substring(1);
+    
     const cleanPhone = `+44${userPhone}`;
     if (userPhone.length !== 10) {
       showPremiumAlert("Invalid Input", "Please enter a valid UK Mobile Number", "error");
@@ -122,10 +123,11 @@ export default function LoginScreen({ navigation }) {
       return;
     }
     
-    let userPhone = phone.trim();
-    if (userPhone.startsWith('0')) {
-      userPhone = userPhone.substring(1);
-    }
+    let userPhone = phone.trim().replace(/\s+/g, '');
+    if (userPhone.startsWith('+44')) userPhone = userPhone.substring(3);
+    if (userPhone.startsWith('44')) userPhone = userPhone.substring(2);
+    if (userPhone.startsWith('0')) userPhone = userPhone.substring(1);
+    
     const cleanPhone = `+44${userPhone}`;
 
     setLoading(true);
@@ -241,6 +243,15 @@ export default function LoginScreen({ navigation }) {
                     Register Now
                   </Text>
                 </Text>
+
+                <TouchableOpacity
+                  style={{ marginTop: 16, alignItems: 'center' }}
+                  onPress={() => navigation.navigate("DeliveryLogin")}
+                >
+                  <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '600' }}>
+                    Delivery Partner? <Text style={{ color: '#1a8b50', fontWeight: 'bold' }}>Sign In Here 🛵</Text>
+                  </Text>
+                </TouchableOpacity>
               </>
             ) : (
               <>

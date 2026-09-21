@@ -86,7 +86,7 @@ function RestaurantCard({ name, address, photo, onPress, instore, kerbside, dist
             <View style={cardStyles.distanceRow}>
               <View style={cardStyles.distanceBadge}>
                 <Ionicons name="navigate" size={12 * scale} color="#FFF" />
-                <Text style={cardStyles.distanceText}>{distance} km</Text>
+                <Text style={cardStyles.distanceText}>{distance} miles</Text>
               </View>
               <Text style={cardStyles.awayText}>away from you</Text>
             </View>

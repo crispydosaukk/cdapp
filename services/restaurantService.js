@@ -5,16 +5,35 @@ export const fetchRestaurants = async (lat, lng) => {
     const snapshot = await firestore().collection('restaurant').get();
     
     if (!snapshot.empty) {
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        userId: doc.data().user_id || doc.id,
-        name: doc.data().restaurant_name || doc.data().name || "Crispy Dosa",
-        address: doc.data().restaurant_address || doc.data().address || "",
-        photo: doc.data().restaurant_photo || doc.data().photo || "",
-        instore: doc.data().instore || 0,
-        kerbside: doc.data().kerbside || 0,
-        distance: 0,
-      }));
+      return snapshot.docs.map(doc => {
+        const data = doc.data();
+        const restLat = data.latitude || data.lat;
+        const restLng = data.longitude || data.lng || data.long;
+        let distance = null;
+
+        if (lat && lng && restLat && restLng) {
+          const R = 3958.8; // Radius of the earth in miles
+          const dLat = (restLat - lat) * (Math.PI / 180);
+          const dLon = (restLng - lng) * (Math.PI / 180);
+          const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat * (Math.PI / 180)) * Math.cos(restLat * (Math.PI / 180)) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          distance = parseFloat((R * c).toFixed(1));
+        }
+
+        return {
+          id: doc.id,
+          userId: data.user_id || doc.id,
+          name: data.restaurant_name || data.name || "Crispy Dosa",
+          address: data.restaurant_address || data.address || "",
+          photo: data.restaurant_photo || data.photo || "",
+          instore: data.instore || 0,
+          kerbside: data.kerbside || 0,
+          distance: distance,
+        };
+      });
     }
     return [];
   } catch (error) {
