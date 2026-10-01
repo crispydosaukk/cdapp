@@ -356,7 +356,7 @@ export default function CartSummary({ navigation }) {
           <TouchableOpacity
             activeOpacity={0.9}
             style={styles.premiumStickyBar}
-            onPress={() => navigation.navigate("CheckoutScreen")}
+            onPress={() => navigation.navigate("CheckoutScreen", { restaurantId: products[0]?.restaurant_id || products[0]?.user_id })}
           >
             <LinearGradient
               colors={["#16a34a", "#15803d"]}

@@ -41,7 +41,7 @@ const { width } = Dimensions.get("window");
 const scale = width / 400;
 const FONT_FAMILY = Platform.select({ ios: "System", android: "System" });
 
-function RestaurantCard({ name, address, photo, onPress, instore, kerbside, distance, index }) {
+function RestaurantCard({ name, address, photo, onPress, instore, kerbside, delivery, distance, index }) {
   const isEven = index % 2 === 0;
   return (
     <TouchableOpacity
@@ -93,19 +93,26 @@ function RestaurantCard({ name, address, photo, onPress, instore, kerbside, dist
           )}
 
           <View style={cardStyles.serviceRow}>
-            {instore && (
+            {instore ? (
               <View style={cardStyles.serviceChip}>
                 <Ionicons name="storefront" size={16 * scale} color="#FF2B5C" />
                 <Text style={cardStyles.serviceChipText}>In-store</Text>
               </View>
-            )}
+            ) : null}
 
-            {kerbside && (
+            {kerbside ? (
               <View style={cardStyles.serviceChip}>
                 <Ionicons name="car-sport" size={18 * scale} color="#16a34a" />
                 <Text style={[cardStyles.serviceChipText, { color: '#16a34a' }]}>Kerbside</Text>
               </View>
-            )}
+            ) : null}
+
+            {delivery ? (
+              <View style={cardStyles.serviceChip}>
+                <Ionicons name="bicycle" size={18 * scale} color="#2563EB" />
+                <Text style={[cardStyles.serviceChipText, { color: '#2563EB' }]}>Delivery</Text>
+              </View>
+            ) : null}
           </View>
         </View>
       </LinearGradient>
@@ -700,6 +707,7 @@ export default function Resturent({ navigation }) {
               photo={r.photo}
               instore={r.instore}
               kerbside={r.kerbside}
+              delivery={r.delivery}
               distance={r.distance}
               onPress={() =>
                 navigation.navigate("Categories", { userId: r.userId })

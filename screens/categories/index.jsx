@@ -372,6 +372,12 @@ export default function Categories({ route, navigation }) {
                         <Text style={[styles.serviceChipText, { color: '#16a34a' }]}>Kerbside</Text>
                       </View>
                     )}
+                    {Boolean(restaurant.delivery) && (
+                      <View style={styles.serviceChip}>
+                        <Ionicons name="bicycle" size={18 * scale} color="#2563EB" />
+                        <Text style={[styles.serviceChipText, { color: '#2563EB' }]}>Delivery</Text>
+                      </View>
+                    )}
                   </View>
                 </View>
               </View>

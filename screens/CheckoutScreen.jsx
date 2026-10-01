@@ -29,7 +29,7 @@ import { getCart } from "../services/cartService";
 import { createOrder } from "../services/orderService";
 import { getWalletSummary } from "../services/walletService";
 import { useStripe } from "@stripe/stripe-react-native";
-import { fetchStripeKey } from "../services/restaurantService";
+import { fetchStripeKey, fetchRestaurantDetails } from "../services/restaurantService";
 
 
 const { width, height } = Dimensions.get("window");
@@ -38,7 +38,9 @@ const scale = width / 400;
 const AnimatedView = Animated.createAnimatedComponent(View);
 import functions from '@react-native-firebase/functions';
 
-export default function CheckoutScreen({ navigation }) {
+export default function CheckoutScreen({ route, navigation }) {
+  const [restaurant, setRestaurant] = useState(null);
+  const [restaurantLoading, setRestaurantLoading] = useState(true);
   const insets = useSafeAreaInsets();
   const [user, setUser] = useState(null);
   const [cart, setCart] = useState([]);
@@ -51,6 +53,38 @@ export default function CheckoutScreen({ navigation }) {
   const [kerbsideColor, setKerbsideColor] = useState("");
   const [kerbsideReg, setKerbsideReg] = useState("");
   const [allergyNote, setAllergyNote] = useState("");
+
+  const effectiveRestaurantId = route?.params?.restaurantId || cart[0]?.restaurant_id || cart[0]?.user_id;
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadRestaurantInfo = async () => {
+      if (!effectiveRestaurantId) return;
+      try {
+        setRestaurantLoading(true);
+        const data = await fetchRestaurantDetails(effectiveRestaurantId);
+        if (isMounted && data) {
+          setRestaurant(data);
+        }
+      } catch (err) {
+        console.error("Failed to load restaurant details in Checkout", err);
+      } finally {
+        if (isMounted) setRestaurantLoading(false);
+      }
+    };
+    loadRestaurantInfo();
+    return () => { isMounted = false; };
+  }, [effectiveRestaurantId]);
+
+  const isDeliveryEnabled = Boolean(
+    restaurant && (Number(restaurant.delivery) === 1 || restaurant.delivery === true || restaurant.delivery === "1")
+  );
+
+  useEffect(() => {
+    if (restaurant && !isDeliveryEnabled && deliveryMethod === "delivery") {
+      setDeliveryMethod(null);
+    }
+  }, [restaurant, isDeliveryEnabled, deliveryMethod]);
 
   // Home delivery state
   const [deliveryAddress, setDeliveryAddress] = useState("");
@@ -159,6 +193,81 @@ export default function CheckoutScreen({ navigation }) {
     })();
   }, [user, isFocused]);
 
+  // Distance calculation helper (Haversine formula in miles)
+  const calculateDistanceMiles = (lat1, lon1, lat2, lon2) => {
+    if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+    const R = 3958.8; // Radius of the earth in miles
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return parseFloat((R * c).toFixed(1));
+  };
+
+  const deliveryPricing = useMemo(() => {
+    if (deliveryMethod !== 'delivery' || !restaurant) {
+      return { fee: 0, distance: null, isOutOfRadius: false, isBelowMinOrder: false, isFreeDelivery: false, maxRadius: 0, minOrder: 0 };
+    }
+
+    const baseFee = Number(restaurant.base_delivery_fee || 0);
+    const baseDist = Number(restaurant.base_delivery_distance || 0);
+    const extraFeePerMile = Number(restaurant.extra_fee_per_mile || 0);
+    const maxRadius = Number(restaurant.max_delivery_radius || 0);
+    const minOrder = Number(restaurant.min_order_delivery || 0);
+    const freeAbove = Number(restaurant.free_delivery_above || 0);
+    const cartSubtotal = (visibleCart || []).reduce((sum, item) => {
+      const p = Number(item.discount_price ?? item.product_price ?? 0);
+      return sum + p * (item.product_quantity || 0);
+    }, 0);
+
+    let distance = null;
+    const custLat = deliveryCoords?.lat;
+    const custLng = deliveryCoords?.lng;
+    const restLat = Number(restaurant.latitude || restaurant.lat);
+    const restLng = Number(restaurant.longitude || restaurant.lng || restaurant.long);
+
+    if (custLat && custLng && restLat && restLng) {
+      distance = calculateDistanceMiles(custLat, custLng, restLat, restLng);
+    }
+
+    const isBelowMinOrder = minOrder > 0 && cartSubtotal < minOrder;
+    const isOutOfRadius = maxRadius > 0 && distance !== null && distance > maxRadius;
+
+    // Free delivery check
+    if (freeAbove > 0 && cartSubtotal >= freeAbove) {
+      return {
+        fee: 0,
+        distance,
+        isOutOfRadius,
+        isBelowMinOrder,
+        isFreeDelivery: true,
+        maxRadius,
+        minOrder,
+        freeAbove,
+      };
+    }
+
+    let calculatedFee = baseFee;
+    if (distance !== null && baseDist > 0 && distance > baseDist && extraFeePerMile > 0) {
+      const extraMiles = distance - baseDist;
+      calculatedFee = baseFee + (extraMiles * extraFeePerMile);
+    }
+
+    return {
+      fee: Math.round(calculatedFee * 100) / 100,
+      distance,
+      isOutOfRadius,
+      isBelowMinOrder,
+      isFreeDelivery: false,
+      maxRadius,
+      minOrder,
+      freeAbove,
+    };
+  }, [deliveryMethod, restaurant, deliveryCoords, visibleCart]);
+
   const getCartTotal = () => {
     return (visibleCart || []).reduce((sum, item) => {
       const p = Number(item.discount_price ?? item.product_price ?? 0);
@@ -168,7 +277,9 @@ export default function CheckoutScreen({ navigation }) {
 
   const getFinalTotal = () => {
     const total = getCartTotal();
-    return Math.max(0, total - (useWallet ? walletUsed : 0) - (useLoyalty ? loyaltyUsed : 0));
+    const deliveryFee = deliveryMethod === "delivery" ? (deliveryPricing?.fee || 0) : 0;
+    const deductions = (useWallet ? walletUsed : 0) + (useLoyalty ? loyaltyUsed : 0);
+    return Math.max(0, parseFloat((total + deliveryFee - deductions).toFixed(2)));
   };
 
   const showPremiumAlert = (title, msg, type = "info") => {
@@ -318,7 +429,7 @@ export default function CheckoutScreen({ navigation }) {
       };
       initStripeKey();
     }
-  }, [isFocused, user, cart.length, useWallet, useLoyalty]);
+  }, [isFocused, user, cart.length, useWallet, useLoyalty, deliveryMethod, deliveryCoords]);
 
   const placeOrder = async () => {
     if (processingPayment) return;
@@ -358,6 +469,32 @@ export default function CheckoutScreen({ navigation }) {
         });
       }
 
+      if (deliveryMethod === 'delivery') {
+        if (!deliveryAddress || !deliveryAddress.trim()) {
+          showPremiumAlert("Address Required", "Please enter your delivery address.", "error");
+          setProcessingPayment(false);
+          return;
+        }
+        if (deliveryPricing?.isOutOfRadius) {
+          showPremiumAlert(
+            "Out of Delivery Range",
+            `Your address is ${deliveryPricing.distance} miles away. This restaurant only delivers up to ${deliveryPricing.maxRadius} miles.`,
+            "error"
+          );
+          setProcessingPayment(false);
+          return;
+        }
+        if (deliveryPricing?.isBelowMinOrder) {
+          showPremiumAlert(
+            "Minimum Order Required",
+            `Minimum order amount for delivery from this restaurant is £${deliveryPricing.minOrder.toFixed(2)}. Your current food total is £${getCartTotal().toFixed(2)}.`,
+            "error"
+          );
+          setProcessingPayment(false);
+          return;
+        }
+      }
+
       const paymentResult = await presentPaymentSheet();
       if (paymentResult.error) {
         setProcessingPayment(false);
@@ -376,7 +513,13 @@ export default function CheckoutScreen({ navigation }) {
         payment_request_id: activeIntent.payment_intent_id,
         instore: deliveryMethod === "instore" ? 1 : 0,
         order_type: deliveryMethod === "delivery" ? "delivery" : deliveryMethod === "instore" ? "takeaway" : "kerbside",
-        ...(deliveryMethod === "delivery" && { delivery_address: deliveryAddress, delivery_coords: deliveryCoords, delivery_status: "unassigned" }),
+        ...(deliveryMethod === "delivery" && {
+          delivery_address: deliveryAddress,
+          delivery_coords: deliveryCoords,
+          delivery_status: "unassigned",
+          delivery_fee: deliveryPricing?.fee || 0,
+          delivery_distance: deliveryPricing?.distance || null,
+        }),
         allergy_note: allergyNote,
         car_color: kerbsideColor,
         reg_number: kerbsideReg,
@@ -647,6 +790,25 @@ export default function CheckoutScreen({ navigation }) {
                   <Text style={styles.invoiceValue}>£{getCartTotal().toFixed(2)}</Text>
                 </View>
 
+                {deliveryMethod === "delivery" && (
+                  <View style={styles.invoiceRow}>
+                    <Text style={styles.invoiceLabel}>
+                      Delivery Fee {deliveryPricing?.distance !== null && deliveryPricing?.distance !== undefined ? `(${deliveryPricing.distance} mi)` : ""}
+                    </Text>
+                    <Text style={[styles.invoiceValue, deliveryPricing?.isFreeDelivery && { color: "#16A34A", fontWeight: "bold" }]}>
+                      {deliveryPricing?.isFreeDelivery ? "FREE" : `£${(deliveryPricing?.fee || 0).toFixed(2)}`}
+                    </Text>
+                  </View>
+                )}
+
+                {deliveryMethod === "delivery" && deliveryPricing?.isOutOfRadius && (
+                  <View style={{ backgroundColor: "#FEE2E2", borderRadius: 8, padding: 8, marginVertical: 6 }}>
+                    <Text style={{ color: "#DC2626", fontSize: 12, fontWeight: "600" }}>
+                      ⚠️ Address is ${deliveryPricing.distance} mi away (max delivery radius: ${deliveryPricing.maxRadius} mi)
+                    </Text>
+                  </View>
+                )}
+
                 {useWallet && walletUsed > 0 && (
                   <AnimatedView style={[styles.invoiceRow, { transform: [{ scale: walletScale }], opacity: walletScale }]}>
                     <Text style={styles.invoiceLabelDeduct}>Wallet Savings</Text>
@@ -762,21 +924,23 @@ export default function CheckoutScreen({ navigation }) {
             </TouchableOpacity>
 
             {/* Home Delivery */}
-            <TouchableOpacity activeOpacity={0.9} onPress={() => setDeliveryMethod("delivery")}>
-              <LinearGradient
-                colors={deliveryMethod === 'delivery' ? ["#EFF6FF", "#DBEAFE"] : ["#F8FAFC", "#F8FAFC"]}
-                style={[styles.optionCard, deliveryMethod === 'delivery' && styles.optionSelectedBlue]}
-              >
-                <View style={[styles.optionIconContainer, deliveryMethod === 'delivery' && { backgroundColor: '#EFF6FF' }]}>
-                  <Ionicons name="bicycle" size={26} color={deliveryMethod === 'delivery' ? "#2563EB" : "#999"} />
-                </View>
-                <View style={{ flex: 1, marginLeft: 15 }}>
-                  <Text style={styles.optionTitle}>Home Delivery</Text>
-                  <Text style={styles.optionSub}>Delivered to your address</Text>
-                </View>
-                <Ionicons name={deliveryMethod === 'delivery' ? "radio-button-on" : "radio-button-off"} size={22} color={deliveryMethod === 'delivery' ? "#2563EB" : "#DDD"} />
-              </LinearGradient>
-            </TouchableOpacity>
+            {isDeliveryEnabled && (
+              <TouchableOpacity activeOpacity={0.9} onPress={() => setDeliveryMethod("delivery")}>
+                <LinearGradient
+                  colors={deliveryMethod === 'delivery' ? ["#EFF6FF", "#DBEAFE"] : ["#F8FAFC", "#F8FAFC"]}
+                  style={[styles.optionCard, deliveryMethod === 'delivery' && styles.optionSelectedBlue]}
+                >
+                  <View style={[styles.optionIconContainer, deliveryMethod === 'delivery' && { backgroundColor: '#EFF6FF' }]}>
+                    <Ionicons name="bicycle" size={26} color={deliveryMethod === 'delivery' ? "#2563EB" : "#999"} />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 15 }}>
+                    <Text style={styles.optionTitle}>Home Delivery</Text>
+                    <Text style={styles.optionSub}>Delivered to your address</Text>
+                  </View>
+                  <Ionicons name={deliveryMethod === 'delivery' ? "radio-button-on" : "radio-button-off"} size={22} color={deliveryMethod === 'delivery' ? "#2563EB" : "#DDD"} />
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
 
             {deliveryMethod === 'kerbside' && (
               <View style={styles.kerbsideFields}>

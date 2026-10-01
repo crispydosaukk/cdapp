@@ -31,6 +31,15 @@ export const fetchRestaurants = async (lat, lng) => {
           photo: data.restaurant_photo || data.photo || "",
           instore: data.instore || 0,
           kerbside: data.kerbside || 0,
+          delivery: data.delivery || 0,
+          latitude: restLat || null,
+          longitude: restLng || null,
+          base_delivery_fee: Number(data.base_delivery_fee || 0),
+          base_delivery_distance: Number(data.base_delivery_distance || 0),
+          extra_fee_per_mile: Number(data.extra_fee_per_mile || 0),
+          max_delivery_radius: Number(data.max_delivery_radius || 0),
+          min_order_delivery: Number(data.min_order_delivery || 0),
+          free_delivery_above: Number(data.free_delivery_above || 0),
           distance: distance,
         };
       });

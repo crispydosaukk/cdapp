@@ -95,6 +95,8 @@ export default function DeliveryLoginScreen({ navigation }) {
         email: partnerDoc.email || email.trim().toLowerCase(),
         mobile_number: partnerDoc.mobile_number || partnerDoc.phone || '',
         vehicle_type: partnerDoc.vehicle_type || 'Bike',
+        restaurant_id: partnerDoc.restaurant_id ? String(partnerDoc.restaurant_id) : null,
+        restaurant_name: partnerDoc.restaurant_name || '',
       };
 
       await AsyncStorage.setItem('delivery_partner', JSON.stringify(partnerData));

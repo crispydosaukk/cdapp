@@ -113,11 +113,12 @@ export default function DeliveryHomeScreen({ navigation }) {
     ]);
   };
 
-  // 1. Available (Unassigned) Orders
+  // 1. Available (Unassigned) Orders - Scoped to Driver's Restaurant
   const availableOrders = orders.filter((o) => {
     const isUnassigned = !o.assigned_delivery_boy_id || o.delivery_status === 'unassigned';
     const isActive = o.order_status !== 4 && o.order_status !== 2 && o.order_status !== 5;
-    return isUnassigned && isActive;
+    const matchesRestaurant = !partner?.restaurant_id || String(o.user_id) === String(partner.restaurant_id);
+    return isUnassigned && isActive && matchesRestaurant;
   });
 
   // 2. Active Deliveries for Current Partner
@@ -498,7 +499,9 @@ export default function DeliveryHomeScreen({ navigation }) {
             </Text>
           </View>
           <View style={{ marginLeft: 10 }}>
-            <Text style={styles.partnerGreeting}>Crispy Dosa Rider</Text>
+            <Text style={styles.partnerGreeting}>
+              {partner?.restaurant_name ? `🛵 ${partner.restaurant_name}` : 'Crispy Dosa Rider'}
+            </Text>
             <Text style={styles.partnerName}>{partner?.name || 'Delivery Partner'}</Text>
           </View>
         </View>
