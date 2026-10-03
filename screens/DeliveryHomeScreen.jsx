@@ -278,10 +278,35 @@ export default function DeliveryHomeScreen({ navigation }) {
         <View style={styles.destinationBox}>
           <Ionicons name="location" size={18} color="#10B981" style={{ marginTop: 2 }} />
           <View style={{ flex: 1, marginLeft: 8 }}>
-            <Text style={styles.destLabel}>DELIVERY ADDRESS</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+              <Text style={styles.destLabel}>DELIVERY ADDRESS</Text>
+              {(item.postcode || item.pincode) ? (
+                <View style={styles.pincodeTag}>
+                  <Text style={styles.pincodeTagText}>{item.postcode || item.pincode}</Text>
+                </View>
+              ) : null}
+            </View>
+
+            {item.house_flat_no ? (
+              <Text style={styles.destHouseText}>
+                🏠 {item.house_flat_no}
+              </Text>
+            ) : null}
+
             <Text style={styles.destAddress} numberOfLines={2}>
-              {item.delivery_address || 'Address provided at checkout'}
+              {item.street_landmark
+                ? `${item.street_landmark}${item.city ? `, ${item.city}` : ''}`
+                : (item.delivery_address || 'Address provided at checkout')}
             </Text>
+
+            {item.delivery_instructions ? (
+              <View style={styles.riderInstructionTag}>
+                <Ionicons name="bicycle" size={12} color="#F59E0B" />
+                <Text style={styles.riderInstructionText} numberOfLines={1}>
+                  Note: {item.delivery_instructions}
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -371,8 +396,39 @@ export default function DeliveryHomeScreen({ navigation }) {
           <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
             <Ionicons name="location" size={20} color="#3B82F6" style={{ marginTop: 2 }} />
             <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={styles.destLabelActive}>DELIVERY DESTINATION</Text>
-              <Text style={styles.destAddressActive}>{item.delivery_address || 'Address provided at checkout'}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <Text style={styles.destLabelActive}>DELIVERY DESTINATION</Text>
+                {(item.postcode || item.pincode) ? (
+                  <View style={[styles.pincodeTag, { backgroundColor: 'rgba(59,130,246,0.2)', borderColor: 'rgba(59,130,246,0.3)' }]}>
+                    <Text style={[styles.pincodeTagText, { color: '#93C5FD' }]}>{item.postcode || item.pincode}</Text>
+                  </View>
+                ) : null}
+              </View>
+
+              {item.house_flat_no ? (
+                <View style={styles.activeHouseBadge}>
+                  <Ionicons name="home" size={14} color="#60A5FA" />
+                  <Text style={styles.activeHouseText}>
+                    {item.house_flat_no}
+                  </Text>
+                </View>
+              ) : null}
+
+              <Text style={styles.destAddressActive}>
+                {item.street_landmark
+                  ? `${item.street_landmark}${item.city ? `, ${item.city}` : ''}${item.postcode ? ` - ${item.postcode}` : ''}`
+                  : (item.delivery_address || 'Address provided at checkout')}
+              </Text>
+
+              {item.delivery_instructions ? (
+                <View style={styles.activeRiderInstructionBox}>
+                  <Ionicons name="bicycle" size={15} color="#FBBF24" />
+                  <View style={{ flex: 1, marginLeft: 6 }}>
+                    <Text style={styles.activeRiderInstructionTitle}>CUSTOMER RIDER NOTE</Text>
+                    <Text style={styles.activeRiderInstructionDesc}>{item.delivery_instructions}</Text>
+                  </View>
+                </View>
+              ) : null}
             </View>
           </View>
 
@@ -803,6 +859,77 @@ const styles = StyleSheet.create({
     color: '#E2E8F0',
     marginTop: 2,
     lineHeight: 18 * scale,
+  },
+  destHouseText: {
+    fontSize: 14 * scale,
+    fontWeight: '800',
+    color: '#34D399',
+    marginTop: 2,
+  },
+  pincodeTag: {
+    backgroundColor: 'rgba(16,185,129,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(16,185,129,0.3)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  pincodeTagText: {
+    fontSize: 9 * scale,
+    fontWeight: '800',
+    color: '#10B981',
+  },
+  riderInstructionTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(245,158,11,0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginTop: 6,
+    gap: 4,
+  },
+  riderInstructionText: {
+    fontSize: 11 * scale,
+    color: '#FCD34D',
+    fontWeight: '600',
+  },
+  activeHouseBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(59,130,246,0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginVertical: 4,
+    gap: 6,
+  },
+  activeHouseText: {
+    fontSize: 14 * scale,
+    fontWeight: '800',
+    color: '#93C5FD',
+  },
+  activeRiderInstructionBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(245,158,11,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.25)',
+    padding: 8,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  activeRiderInstructionTitle: {
+    fontSize: 9 * scale,
+    fontWeight: '800',
+    color: '#FBBF24',
+    letterSpacing: 0.5,
+  },
+  activeRiderInstructionDesc: {
+    fontSize: 12 * scale,
+    fontWeight: '600',
+    color: '#FDE68A',
+    marginTop: 1,
   },
   destAddressActive: {
     fontSize: 13 * scale,

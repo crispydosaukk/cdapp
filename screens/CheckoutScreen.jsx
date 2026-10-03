@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -86,10 +86,25 @@ export default function CheckoutScreen({ route, navigation }) {
     }
   }, [restaurant, isDeliveryEnabled, deliveryMethod]);
 
-  // Home delivery state
+  // Home delivery structured address state (Swiggy / Zomato style)
+  const [houseFlatNo, setHouseFlatNo] = useState("");
+  const [streetLandmark, setStreetLandmark] = useState("");
+  const [city, setCity] = useState("");
+  const [postcode, setPostcode] = useState("");
+  const [deliveryInstructions, setDeliveryInstructions] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryCoords, setDeliveryCoords] = useState(null);
   const [locationLoading, setLocationLoading] = useState(false);
+
+  const getFullDeliveryAddress = () => {
+    const parts = [
+      houseFlatNo.trim(),
+      streetLandmark.trim(),
+      city.trim(),
+      postcode.trim().toUpperCase(),
+    ].filter(Boolean);
+    return parts.length > 0 ? parts.join(", ") : deliveryAddress;
+  };
 
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
@@ -470,8 +485,19 @@ export default function CheckoutScreen({ route, navigation }) {
       }
 
       if (deliveryMethod === 'delivery') {
-        if (!deliveryAddress || !deliveryAddress.trim()) {
-          showPremiumAlert("Address Required", "Please enter your delivery address.", "error");
+        if (!houseFlatNo.trim()) {
+          showPremiumAlert("House / Flat Required", "Please enter your House, Flat, or Building number.", "error");
+          setProcessingPayment(false);
+          return;
+        }
+        if (!postcode.trim()) {
+          showPremiumAlert("Postcode / PIN Required", "Please enter your Postcode / Pincode.", "error");
+          setProcessingPayment(false);
+          return;
+        }
+        const fullAddr = getFullDeliveryAddress();
+        if (!fullAddr) {
+          showPremiumAlert("Address Required", "Please complete your delivery address details.", "error");
           setProcessingPayment(false);
           return;
         }
@@ -502,9 +528,12 @@ export default function CheckoutScreen({ route, navigation }) {
       }
 
       const restaurantId = cart[0]?.restaurant_id || cart[0]?.user_id;
+      const fullDeliveryAddr = getFullDeliveryAddress();
 
       const payload = {
         user_id: String(restaurantId), // this must be the restaurant ID!
+        restaurant_id: String(restaurantId),
+        restaurant_name: restaurant?.name || restaurant?.restaurant_name || "",
         customer_id: String(user.customer_id ?? user.id),
         customer_name: user.full_name || "",
         customer_email: user.email || "",
@@ -514,7 +543,13 @@ export default function CheckoutScreen({ route, navigation }) {
         instore: deliveryMethod === "instore" ? 1 : 0,
         order_type: deliveryMethod === "delivery" ? "delivery" : deliveryMethod === "instore" ? "takeaway" : "kerbside",
         ...(deliveryMethod === "delivery" && {
-          delivery_address: deliveryAddress,
+          delivery_address: fullDeliveryAddr,
+          house_flat_no: houseFlatNo.trim(),
+          street_landmark: streetLandmark.trim(),
+          city: city.trim(),
+          postcode: postcode.trim().toUpperCase(),
+          pincode: postcode.trim().toUpperCase(),
+          delivery_instructions: deliveryInstructions.trim(),
           delivery_coords: deliveryCoords,
           delivery_status: "unassigned",
           delivery_fee: deliveryPricing?.fee || 0,
@@ -592,10 +627,23 @@ export default function CheckoutScreen({ route, navigation }) {
         const { latitude, longitude } = pos.coords;
         setDeliveryCoords({ lat: latitude, lng: longitude });
         try {
-          const r = await fetch("https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}", { headers: { 'Accept-Language': 'en' } });
+          const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`, { headers: { 'Accept-Language': 'en' } });
           const d = await r.json();
-          setDeliveryAddress(d.display_name || "${latitude.toFixed(5)}, ${longitude.toFixed(5)}");
-        } catch { setDeliveryAddress("${latitude.toFixed(5)}, ${longitude.toFixed(5)}"); }
+          if (d) {
+            const addr = d.address || {};
+            const streetParts = [addr.road, addr.suburb || addr.neighbourhood].filter(Boolean).join(", ");
+            if (streetParts) setStreetLandmark(streetParts);
+            const cityPart = addr.city || addr.town || addr.village || addr.county || "";
+            if (cityPart) setCity(cityPart);
+            if (addr.postcode) setPostcode(addr.postcode.toUpperCase());
+            if (addr.house_number && !houseFlatNo) setHouseFlatNo(addr.house_number);
+
+            const display = d.display_name || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+            setDeliveryAddress(display);
+          }
+        } catch {
+          setDeliveryAddress(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+        }
         setLocationLoading(false);
       },
       () => { setLocationLoading(false); showPremiumAlert('Location Error', 'Cannot get location. Type your address manually.', 'error'); },
@@ -676,10 +724,41 @@ export default function CheckoutScreen({ route, navigation }) {
                 </View>
               )}
 
-              {(deliveryMethod === 'delivery' && deliveryAddress.trim()) && (
-                <View style={styles.deliveryAddressBar}>
-                  <Ionicons name="location" size={16} color="#2563EB" />
-                  <Text style={styles.deliveryAddressText} numberOfLines={2}>{deliveryAddress}</Text>
+              {(deliveryMethod === 'delivery' && (houseFlatNo || deliveryAddress)) && (
+                <View style={[styles.deliveryAddressBar, { flexDirection: 'column', alignItems: 'flex-start' }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                    <Ionicons name="location" size={16} color="#2563EB" />
+                    <Text style={{ fontSize: 13 * scale, fontWeight: '700', color: '#1E3A8A', marginLeft: 6 }}>
+                      Home Delivery Address
+                    </Text>
+                    {postcode.trim() ? (
+                      <View style={{ marginLeft: 'auto', backgroundColor: '#DBEAFE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                        <Text style={{ fontSize: 10 * scale, fontWeight: '800', color: '#1D4ED8' }}>{postcode.trim().toUpperCase()}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  {houseFlatNo.trim() ? (
+                    <Text style={{ fontSize: 13 * scale, fontWeight: '700', color: '#0F172A', marginLeft: 22 }}>
+                      {houseFlatNo.trim()}
+                    </Text>
+                  ) : null}
+                  {streetLandmark.trim() || city.trim() ? (
+                    <Text style={{ fontSize: 12 * scale, color: '#475569', marginLeft: 22, marginTop: 1 }}>
+                      {[streetLandmark.trim(), city.trim()].filter(Boolean).join(", ")}
+                    </Text>
+                  ) : deliveryAddress ? (
+                    <Text style={{ fontSize: 12 * scale, color: '#475569', marginLeft: 22, marginTop: 1 }} numberOfLines={2}>
+                      {deliveryAddress}
+                    </Text>
+                  ) : null}
+                  {deliveryInstructions.trim() ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, marginLeft: 22, backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                      <Ionicons name="bicycle" size={13} color="#D97706" />
+                      <Text style={{ fontSize: 11 * scale, color: '#92400E', marginLeft: 5, fontWeight: '600' }}>
+                        Rider Note: {deliveryInstructions.trim()}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
               )}
 
@@ -950,7 +1029,7 @@ export default function CheckoutScreen({ route, navigation }) {
               </View>
             )}
 
-            {/* Home Delivery address input */}
+            {/* Home Delivery address inputs (Swiggy / Zomato style) */}
             {deliveryMethod === 'delivery' && (
               <View style={styles.kerbsideFields}>
                 <TouchableOpacity style={styles.locationBtn} onPress={fetchCurrentLocation} disabled={locationLoading} activeOpacity={0.8}>
@@ -965,20 +1044,78 @@ export default function CheckoutScreen({ route, navigation }) {
                     </Text>
                   </LinearGradient>
                 </TouchableOpacity>
-                <TextInput
-                  style={[styles.kInput, { height: 90, textAlignVertical: 'top', paddingTop: 14 }]}
-                  placeholder="Or type your full delivery address..."
-                  value={deliveryAddress}
-                  onChangeText={setDeliveryAddress}
-                  placeholderTextColor="#BCBCBC"
-                  multiline
-                />
+
+                {/* House / Flat / Floor / Building */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>
+                    HOUSE / FLAT / FLOOR / BUILDING NO. <Text style={{ color: '#EF4444' }}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={styles.kInput}
+                    placeholder="e.g. Flat 4B, 2nd Floor, Oak Heights"
+                    value={houseFlatNo}
+                    onChangeText={setHouseFlatNo}
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+
+                {/* Street / Area / Landmark */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>APARTMENT / ROAD / LANDMARK</Text>
+                  <TextInput
+                    style={styles.kInput}
+                    placeholder="e.g. High Street, Opposite Central Park"
+                    value={streetLandmark}
+                    onChangeText={setStreetLandmark}
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+
+                {/* City & Postcode in 2 columns */}
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <Text style={styles.inputLabel}>CITY / TOWN</Text>
+                    <TextInput
+                      style={styles.kInput}
+                      placeholder="e.g. Hounslow"
+                      value={city}
+                      onChangeText={setCity}
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <Text style={styles.inputLabel}>
+                      POSTCODE / PIN <Text style={{ color: '#EF4444' }}>*</Text>
+                    </Text>
+                    <TextInput
+                      style={styles.kInput}
+                      placeholder="e.g. TW3 3AA"
+                      value={postcode}
+                      onChangeText={(val) => setPostcode(val.toUpperCase())}
+                      placeholderTextColor="#94A3B8"
+                      autoCapitalize="characters"
+                    />
+                  </View>
+                </View>
+
+                {/* Rider delivery instructions (Swiggy/Zomato style) */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>DELIVERY INSTRUCTIONS FOR RIDER (OPTIONAL)</Text>
+                  <TextInput
+                    style={[styles.kInput, { height: 65, textAlignVertical: 'top', paddingTop: 10 }]}
+                    placeholder="e.g. Ring bell twice, leave at reception / doorstep"
+                    value={deliveryInstructions}
+                    onChangeText={setDeliveryInstructions}
+                    placeholderTextColor="#94A3B8"
+                    multiline
+                  />
+                </View>
               </View>
             )}
 
             <TouchableOpacity
-              style={[styles.sheetActionBtn, (!deliveryMethod || (deliveryMethod === 'delivery' && !deliveryAddress.trim())) && { opacity: 0.5 }]}
-              disabled={!deliveryMethod || (deliveryMethod === 'delivery' && !deliveryAddress.trim())}
+              style={[styles.sheetActionBtn, (!deliveryMethod || (deliveryMethod === 'delivery' && (!houseFlatNo.trim() || !postcode.trim()))) && { opacity: 0.5 }]}
+              disabled={!deliveryMethod || (deliveryMethod === 'delivery' && (!houseFlatNo.trim() || !postcode.trim()))}
               onPress={() => {
                 closeSheet(() => {
                   setDeliveryPopup(false);
@@ -1343,7 +1480,9 @@ const styles = StyleSheet.create({
   optionTitle: { fontSize: 16 * scale, fontFamily: 'PoppinsBold', color: '#0F172A', fontWeight: '800' },
   optionSub: { fontSize: 13 * scale, fontFamily: 'PoppinsMedium', color: '#64748B', marginTop: 2 },
   kerbsideFields: { marginTop: 10, marginBottom: 20 },
-  kInput: { backgroundColor: '#F8FAFC', padding: 16, borderRadius: 14, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0', fontFamily: 'PoppinsMedium', color: '#0F172A' },
+  inputGroup: { marginBottom: 12 },
+  inputLabel: { fontSize: 10 * scale, fontFamily: 'PoppinsBold', color: '#64748B', fontWeight: '800', letterSpacing: 0.5, marginBottom: 5 },
+  kInput: { backgroundColor: '#F8FAFC', padding: 14, borderRadius: 14, marginBottom: 4, borderWidth: 1, borderColor: '#E2E8F0', fontFamily: 'PoppinsMedium', color: '#0F172A', fontSize: 14 * scale },
   optionSelectedBlue: { borderColor: '#2563EB', backgroundColor: '#EFF6FF' },
   locationBtn: { marginBottom: 12, borderRadius: 14, overflow: 'hidden' },
   locationBtnGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, paddingHorizontal: 20 },

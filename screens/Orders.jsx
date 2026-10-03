@@ -497,6 +497,43 @@ export default function Orders({ navigation, route }) {
                       </View>
                     )}
 
+                    {/* HOME DELIVERY DETAILS */}
+                    {(orderDetails.delivery_address || orderDetails.order_type === 'delivery' || orderDetails.delivery_type === 'home') && (
+                      <View style={[styles.kerbsideBox, { borderColor: '#BFDBFE', backgroundColor: '#EFF6FF' }]}>
+                        <View style={styles.kerbsideHeader}>
+                          <Ionicons name="bicycle" size={16} color="#2563EB" style={{ marginRight: 8 }} />
+                          <Text style={[styles.kerbsideTitle, { color: '#1D4ED8' }]}>Delivery Address</Text>
+                          {(orderDetails.postcode || orderDetails.pincode) ? (
+                            <View style={{ marginLeft: 'auto', backgroundColor: '#DBEAFE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                              <Text style={{ fontSize: 10 * scale, fontWeight: '800', color: '#1D4ED8' }}>
+                                {orderDetails.postcode || orderDetails.pincode}
+                              </Text>
+                            </View>
+                          ) : null}
+                        </View>
+                        <View style={{ padding: 12 }}>
+                          {orderDetails.house_flat_no ? (
+                            <Text style={{ fontSize: 14 * scale, fontWeight: '700', color: '#0F172A', marginBottom: 2 }}>
+                              {orderDetails.house_flat_no}
+                            </Text>
+                          ) : null}
+                          <Text style={{ fontSize: 13 * scale, color: '#334155', lineHeight: 18 * scale }}>
+                            {orderDetails.street_landmark
+                              ? `${orderDetails.street_landmark}${orderDetails.city ? `, ${orderDetails.city}` : ''}`
+                              : orderDetails.delivery_address}
+                          </Text>
+                          {orderDetails.delivery_instructions ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, backgroundColor: '#FEF3C7', padding: 8, borderRadius: 6 }}>
+                              <Ionicons name="chatbubble-outline" size={12} color="#D97706" style={{ marginRight: 6 }} />
+                              <Text style={{ fontSize: 11 * scale, color: '#92400E', fontWeight: '600' }}>
+                                Note: {orderDetails.delivery_instructions}
+                              </Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      </View>
+                    )}
+
                     <Text style={styles.sectionHeader}>ITEMS</Text>
                     <View style={styles.itemsList}>
                       {(orderDetails.items || orderDetails.order_items || orderDetails.products || []).map((it, idx) => (
