@@ -6,10 +6,12 @@
     "android": "react-native run-android",
     "ios": "react-native run-ios",
     "lint": "eslint .",
-    "start": "node --max-old-space-size=4096 ./node_modules/react-native/cli.js start",
+    "start": "node --max-old-space-size=2048 ./node_modules/react-native/cli.js start",
     "test": "jest",
-    "android:clean": "cd android && ./gradlew clean",
-    "start:reset": "node --max-old-space-size=4096 ./node_modules/react-native/cli.js start --reset-cache"
+    "android:clean": "cd android && gradlew.bat clean",
+    "start:reset": "node --max-old-space-size=2048 ./node_modules/react-native/cli.js start --reset-cache",
+    "build:apk": "cd android && gradlew.bat assembleRelease",
+    "build:apk-debug": "cd android && gradlew.bat assembleDebug"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.2.0",

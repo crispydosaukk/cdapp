@@ -15,7 +15,7 @@ import AppHeader from "./AppHeader";
 import { AuthRequiredInline } from "./AuthRequired";
 import BottomBar from "./BottomBar";
 import MenuModal from "./MenuModal";
-import { Modal, ScrollView, Image, Dimensions, Platform } from "react-native";
+import { Modal, ScrollView, Image, Dimensions, Platform, Linking } from "react-native";
 import LinearGradient from "react-native-linear-gradient";
 import { useIsFocused, useFocusEffect } from "@react-navigation/native";
 import { getOrders } from "../services/orderService";
@@ -45,12 +45,20 @@ export default function Orders({ navigation, route }) {
     5: { label: "Cancelled", color: "#6b7280", icon: "ban" } // Gray
   };
 
-  const getOrderUIState = (status, etaTime) => {
+  const getOrderUIState = (status, etaTime, orderType, deliveryStatus, driverName) => {
     const s = Number(status);
-    if (s === 4) return { state: "COLLECTED" };
+    const isDelivery = String(orderType || '').toLowerCase() === 'delivery';
+
+    if (isDelivery) {
+      if (s === 4 || deliveryStatus === 'delivered') return { state: "DELIVERED" };
+      if (deliveryStatus === 'out_for_delivery') return { state: "OUT_FOR_DELIVERY", driverName };
+      if (deliveryStatus === 'accepted') return { state: "DRIVER_ASSIGNED", driverName };
+    }
+
+    if (s === 4) return { state: isDelivery ? "DELIVERED" : "COLLECTED" };
     if (s === 2) return { state: "REJECTED" };
     if (s === 5) return { state: "CANCELLED" };
-    if (s === 3) return { state: "READY" };
+    if (s === 3) return { state: isDelivery ? "OUT_FOR_DELIVERY" : "READY", driverName };
     if (s === 1 && etaTime) {
       const eta = new Date(etaTime.replace(" ", "T")).getTime();
       const now = Date.now();
@@ -154,7 +162,34 @@ export default function Orders({ navigation, route }) {
 
   useEffect(() => { if (isFocused && user) fetchOrders(); }, [isFocused, user, fetchOrders]);
 
-  const renderStatusChip = (status) => {
+  const renderStatusChip = (status, orderType, deliveryStatus) => {
+    const isDelivery = String(orderType || '').toLowerCase() === 'delivery';
+    if (isDelivery) {
+      if (deliveryStatus === 'out_for_delivery') {
+        return (
+          <View style={[styles.statusChip, { backgroundColor: "#2563EB15", flexDirection: 'row', alignItems: 'center' }]}>
+            <Ionicons name="bicycle" size={13} color="#2563EB" style={{ marginRight: 4 }} />
+            <Text style={[styles.statusText, { color: "#2563EB" }]}>Out for Delivery</Text>
+          </View>
+        );
+      }
+      if (deliveryStatus === 'accepted' && Number(status) !== 4) {
+        return (
+          <View style={[styles.statusChip, { backgroundColor: "#7C3AED15", flexDirection: 'row', alignItems: 'center' }]}>
+            <Ionicons name="person" size={13} color="#7C3AED" style={{ marginRight: 4 }} />
+            <Text style={[styles.statusText, { color: "#7C3AED" }]}>Rider Assigned</Text>
+          </View>
+        );
+      }
+      if (Number(status) === 4 || deliveryStatus === 'delivered') {
+        return (
+          <View style={[styles.statusChip, { backgroundColor: "#16a34a15", flexDirection: 'row', alignItems: 'center' }]}>
+            <Ionicons name="checkmark-done-circle" size={13} color="#16a34a" style={{ marginRight: 4 }} />
+            <Text style={[styles.statusText, { color: "#16a34a" }]}>Delivered</Text>
+          </View>
+        );
+      }
+    }
     const cfg = ORDER_STATUS[Number(status)] || { label: "Processing", color: "#555", icon: "sync" };
     return (
       <View style={[styles.statusChip, { backgroundColor: cfg.color + "15", flexDirection: 'row', alignItems: 'center' }]}>
@@ -187,7 +222,13 @@ export default function Orders({ navigation, route }) {
     const itemsCount =
       item.items_count || item.items?.length || item.item_count || 0;
 
-    const ui = getOrderUIState(item.order_status ?? item.status, item.delivery_estimate_time);
+    const ui = getOrderUIState(
+      item.order_status ?? item.status,
+      item.delivery_estimate_time,
+      item.order_type,
+      item.delivery_status,
+      item.delivery_boy_name
+    );
     const isEven = orderId % 2 === 0;
 
     return (
@@ -213,7 +254,7 @@ export default function Orders({ navigation, route }) {
               </View>
               <Text style={styles.orderNo}>{orderNo}</Text>
             </View>
-            {renderStatusChip(item.order_status ?? item.status)}
+            {renderStatusChip(item.order_status ?? item.status, item.order_type, item.delivery_status)}
           </View>
 
           <View style={styles.cardContent}>
@@ -302,6 +343,60 @@ export default function Orders({ navigation, route }) {
                 />
                 <Text style={[styles.statusBadgeText, { color: "#8b5cf6" }]}>
                   Order is ready for pickup
+                </Text>
+              </View>
+            )}
+            {ui.state === "OUT_FOR_DELIVERY" && (
+              <View
+                style={[
+                  styles.statusBadge,
+                  { backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" },
+                ]}
+              >
+                <Ionicons
+                  name="bicycle"
+                  size={16 * scale}
+                  color="#2563EB"
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={[styles.statusBadgeText, { color: "#2563EB", fontWeight: "700" }]}>
+                  🛵 Out for Delivery — {ui.driverName ? `${ui.driverName} is ` : ''}on the way to you!
+                </Text>
+              </View>
+            )}
+            {ui.state === "DRIVER_ASSIGNED" && (
+              <View
+                style={[
+                  styles.statusBadge,
+                  { backgroundColor: "#F5F3FF", borderColor: "#DDD6FE" },
+                ]}
+              >
+                <Ionicons
+                  name="shield-checkmark"
+                  size={16 * scale}
+                  color="#7C3AED"
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={[styles.statusBadgeText, { color: "#7C3AED", fontWeight: "700" }]}>
+                  🛵 Rider Assigned: {ui.driverName || 'Delivery Partner'} (Heading to restaurant)
+                </Text>
+              </View>
+            )}
+            {ui.state === "DELIVERED" && (
+              <View
+                style={[
+                  styles.statusBadge,
+                  { backgroundColor: "#F0FDF4", borderColor: "#DCFCE7" },
+                ]}
+              >
+                <Ionicons
+                  name="checkmark-done-circle"
+                  size={16 * scale}
+                  color="#16a34a"
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={[styles.statusBadgeText, { color: "#16a34a", fontWeight: "700" }]}>
+                  Order delivered successfully to your door 🎉
                 </Text>
               </View>
             )}
@@ -492,6 +587,43 @@ export default function Orders({ navigation, route }) {
                               <Text style={styles.kerbsideLabel}>COLOR</Text>
                               <Text style={styles.kerbsideValue}>{orderDetails.car_color || orderDetails.vehicle_color}</Text>
                             </View>
+                          ) : null}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* ASSIGNED DELIVERY PARTNER */}
+                    {(orderDetails.delivery_boy_name || orderDetails.delivery_status === 'out_for_delivery' || orderDetails.delivery_status === 'accepted') && (
+                      <View style={[styles.kerbsideBox, { borderColor: '#86EFAC', backgroundColor: '#F0FDF4', marginBottom: 14 }]}>
+                        <View style={styles.kerbsideHeader}>
+                          <Ionicons name="bicycle" size={18} color="#15803d" style={{ marginRight: 8 }} />
+                          <Text style={[styles.kerbsideTitle, { color: '#15803d' }]}>Delivery Partner</Text>
+                          <View style={{ marginLeft: 'auto', backgroundColor: orderDetails.delivery_status === 'out_for_delivery' ? '#DBEAFE' : '#DCFCE7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 }}>
+                            <Text style={{ fontSize: 10 * scale, fontWeight: '800', color: orderDetails.delivery_status === 'out_for_delivery' ? '#1D4ED8' : '#15803d' }}>
+                              {orderDetails.delivery_status === 'out_for_delivery' ? '🛵 OUT FOR DELIVERY' : '⚡ ASSIGNED'}
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={{ padding: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <View style={{ flex: 1, paddingRight: 8 }}>
+                            <Text style={{ fontSize: 15 * scale, fontWeight: '800', color: '#0F172A' }}>
+                              {orderDetails.delivery_boy_name || 'Delivery Partner'}
+                            </Text>
+                            <Text style={{ fontSize: 12 * scale, color: '#64748B', marginTop: 2 }}>
+                              {orderDetails.delivery_status === 'out_for_delivery'
+                                ? 'Rider is on the way to your delivery address'
+                                : 'Assigned to your order and heading to branch'}
+                            </Text>
+                          </View>
+                          {orderDetails.delivery_boy_phone ? (
+                            <TouchableOpacity
+                              style={{ backgroundColor: '#16a34a', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                              onPress={() => Linking.openURL(`tel:${orderDetails.delivery_boy_phone.replace(/[^0-9+]/g, '')}`)}
+                              activeOpacity={0.8}
+                            >
+                              <Ionicons name="call" size={14} color="#FFF" />
+                              <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 12 * scale }}>Call</Text>
+                            </TouchableOpacity>
                           ) : null}
                         </View>
                       </View>

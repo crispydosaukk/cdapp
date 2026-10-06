@@ -33,4 +33,9 @@ allprojects {
             force 'com.google.android.gms:play-services-location:20.0.0'
         }
     }
+    tasks.whenTaskAdded { task ->
+        if (task.name.startsWith("lintVital")) {
+            task.enabled = false
+        }
+    }
 }

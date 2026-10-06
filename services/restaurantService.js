@@ -53,9 +53,21 @@ export const fetchRestaurants = async (lat, lng) => {
 
 export const fetchRestaurantDetails = async (userId) => {
   try {
-    const doc = await firestore().collection('restaurant').doc(String(userId)).get();
+    let doc = await firestore().collection('restaurant').doc(String(userId)).get();
     if (doc.exists) {
       return { id: doc.id, ...doc.data() };
+    }
+    // Fallback: search by user_id field as string
+    const qSnap = await firestore().collection('restaurant').where('user_id', '==', String(userId)).limit(1).get();
+    if (!qSnap.empty) {
+      const d = qSnap.docs[0];
+      return { id: d.id, ...d.data() };
+    }
+    // Fallback: search by user_id field as number
+    const qSnapNum = await firestore().collection('restaurant').where('user_id', '==', Number(userId)).limit(1).get();
+    if (!qSnapNum.empty) {
+      const d = qSnapNum.docs[0];
+      return { id: d.id, ...d.data() };
     }
     return null;
   } catch (error) {

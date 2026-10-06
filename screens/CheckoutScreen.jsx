@@ -210,41 +210,142 @@ export default function CheckoutScreen({ route, navigation }) {
 
   // Distance calculation helper (Haversine formula in miles)
   const calculateDistanceMiles = (lat1, lon1, lat2, lon2) => {
-    if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+    const p1 = Number(lat1);
+    const l1 = Number(lon1);
+    const p2 = Number(lat2);
+    const l2 = Number(lon2);
+    if (isNaN(p1) || isNaN(l1) || isNaN(p2) || isNaN(l2) || p1 === 0 || p2 === 0) return null;
+
     const R = 3958.8; // Radius of the earth in miles
-    const dLat = (lat2 - lat1) * (Math.PI / 180);
-    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const dLat = (p2 - p1) * (Math.PI / 180);
+    const dLon = (l2 - l1) * (Math.PI / 180);
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+      Math.cos(p1 * (Math.PI / 180)) * Math.cos(p2 * (Math.PI / 180)) *
       Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return parseFloat((R * c).toFixed(1));
   };
 
-  const deliveryPricing = useMemo(() => {
-    if (deliveryMethod !== 'delivery' || !restaurant) {
-      return { fee: 0, distance: null, isOutOfRadius: false, isBelowMinOrder: false, isFreeDelivery: false, maxRadius: 0, minOrder: 0 };
+  // Auto-geocode UK postcode if coordinates are not set or when postcode changes
+  const geocodePostcode = async (pc) => {
+    if (!pc || typeof pc !== "string") return null;
+    const cleanPc = pc.replace(/\s+/g, "").toUpperCase();
+    if (cleanPc.length < 4) return null;
+
+    try {
+      // 1. Instant lookup via postcodes.io (Official UK Open Postcode API - fast, free, no key)
+      const res = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(cleanPc)}`);
+      const data = await res.json();
+      if (data?.status === 200 && data?.result) {
+        const { latitude, longitude } = data.result;
+        const coords = { lat: latitude, lng: longitude, latitude, longitude };
+        setDeliveryCoords(coords);
+        return coords;
+      }
+    } catch (e) {
+      console.log("postcodes.io lookup error:", e);
     }
 
-    const baseFee = Number(restaurant.base_delivery_fee || 0);
-    const baseDist = Number(restaurant.base_delivery_distance || 0);
-    const extraFeePerMile = Number(restaurant.extra_fee_per_mile || 0);
-    const maxRadius = Number(restaurant.max_delivery_radius || 0);
-    const minOrder = Number(restaurant.min_order_delivery || 0);
-    const freeAbove = Number(restaurant.free_delivery_above || 0);
+    try {
+      // 2. Fallback lookup via OpenStreetMap Nominatim
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?postalcode=${encodeURIComponent(pc)}&country=GB&format=json&limit=1`,
+        { headers: { "Accept-Language": "en", "User-Agent": "CrispyDosaApp" } }
+      );
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const lat = parseFloat(data[0].lat);
+        const lon = parseFloat(data[0].lon);
+        if (!isNaN(lat) && !isNaN(lon)) {
+          const coords = { lat, lng: lon, latitude: lat, longitude: lon };
+          setDeliveryCoords(coords);
+          return coords;
+        }
+      }
+    } catch (e) {
+      console.log("Nominatim geocode fallback error:", e);
+    }
+    return null;
+  };
+
+  // Auto-trigger geocoding when user types or edits postcode
+  useEffect(() => {
+    if (deliveryMethod === "delivery" && postcode && postcode.trim().length >= 5) {
+      const timer = setTimeout(() => {
+        geocodePostcode(postcode.trim());
+      }, 700);
+      return () => clearTimeout(timer);
+    }
+  }, [deliveryMethod, postcode]);
+
+  const deliveryPricing = useMemo(() => {
+    if (deliveryMethod !== 'delivery' || !restaurant) {
+      return {
+        fee: 0,
+        distance: null,
+        isOutOfRadius: false,
+        isBelowMinOrder: false,
+        isFreeDelivery: false,
+        maxRadius: 0,
+        minOrder: 0,
+        freeAbove: 0,
+        baseFee: 0,
+      };
+    }
+
+    // Comprehensive fallback across all possible database field aliases
+    const baseFee = Number(
+      restaurant.base_delivery_fee ??
+      restaurant.delivery_charges ??
+      restaurant.delivery_fee ??
+      restaurant.base_fee ??
+      0
+    );
+    const baseDist = Number(
+      restaurant.base_delivery_distance ??
+      restaurant.base_distance ??
+      restaurant.delivery_distance ??
+      0
+    );
+    const extraFeePerMile = Number(
+      restaurant.extra_fee_per_mile ??
+      restaurant.per_mile_charge ??
+      restaurant.extra_charge_per_mile ??
+      restaurant.extra_fee ??
+      0
+    );
+    const maxRadius = Number(
+      restaurant.max_delivery_radius ??
+      restaurant.delivery_radius ??
+      restaurant.max_radius ??
+      0
+    );
+    const minOrder = Number(
+      restaurant.min_order_delivery ??
+      restaurant.min_order ??
+      restaurant.minimum_order ??
+      0
+    );
+    const freeAbove = Number(
+      restaurant.free_delivery_above ??
+      restaurant.free_delivery_amount ??
+      restaurant.free_delivery ??
+      0
+    );
+
     const cartSubtotal = (visibleCart || []).reduce((sum, item) => {
       const p = Number(item.discount_price ?? item.product_price ?? 0);
       return sum + p * (item.product_quantity || 0);
     }, 0);
 
     let distance = null;
-    const custLat = deliveryCoords?.lat;
-    const custLng = deliveryCoords?.lng;
+    const custLat = Number(deliveryCoords?.lat ?? deliveryCoords?.latitude);
+    const custLng = Number(deliveryCoords?.lng ?? deliveryCoords?.longitude);
     const restLat = Number(restaurant.latitude || restaurant.lat);
     const restLng = Number(restaurant.longitude || restaurant.lng || restaurant.long);
 
-    if (custLat && custLng && restLat && restLng) {
+    if (!isNaN(custLat) && !isNaN(custLng) && !isNaN(restLat) && !isNaN(restLng) && custLat !== 0 && restLat !== 0) {
       distance = calculateDistanceMiles(custLat, custLng, restLat, restLng);
     }
 
@@ -262,6 +363,7 @@ export default function CheckoutScreen({ route, navigation }) {
         maxRadius,
         minOrder,
         freeAbove,
+        baseFee,
       };
     }
 
@@ -269,6 +371,8 @@ export default function CheckoutScreen({ route, navigation }) {
     if (distance !== null && baseDist > 0 && distance > baseDist && extraFeePerMile > 0) {
       const extraMiles = distance - baseDist;
       calculatedFee = baseFee + (extraMiles * extraFeePerMile);
+    } else if (distance !== null && baseDist === 0 && extraFeePerMile > 0) {
+      calculatedFee = baseFee + (distance * extraFeePerMile);
     }
 
     return {
@@ -280,6 +384,7 @@ export default function CheckoutScreen({ route, navigation }) {
       maxRadius,
       minOrder,
       freeAbove,
+      baseFee,
     };
   }, [deliveryMethod, restaurant, deliveryCoords, visibleCart]);
 
@@ -883,7 +988,7 @@ export default function CheckoutScreen({ route, navigation }) {
                 {deliveryMethod === "delivery" && deliveryPricing?.isOutOfRadius && (
                   <View style={{ backgroundColor: "#FEE2E2", borderRadius: 8, padding: 8, marginVertical: 6 }}>
                     <Text style={{ color: "#DC2626", fontSize: 12, fontWeight: "600" }}>
-                      ⚠️ Address is ${deliveryPricing.distance} mi away (max delivery radius: ${deliveryPricing.maxRadius} mi)
+                      ⚠️ Address is {deliveryPricing.distance} mi away (max delivery radius: {deliveryPricing.maxRadius} mi)
                     </Text>
                   </View>
                 )}
@@ -1117,6 +1222,9 @@ export default function CheckoutScreen({ route, navigation }) {
               style={[styles.sheetActionBtn, (!deliveryMethod || (deliveryMethod === 'delivery' && (!houseFlatNo.trim() || !postcode.trim()))) && { opacity: 0.5 }]}
               disabled={!deliveryMethod || (deliveryMethod === 'delivery' && (!houseFlatNo.trim() || !postcode.trim()))}
               onPress={() => {
+                if (deliveryMethod === 'delivery' && postcode && (!deliveryCoords || !deliveryCoords.lat)) {
+                  geocodePostcode(postcode.trim());
+                }
                 closeSheet(() => {
                   setDeliveryPopup(false);
                   setTimeout(() => setAllergyPopup(true), 100);
