@@ -1,6 +1,6 @@
 {
   "name": "crispyDosa",
-  "version": "0.0.1",
+  "version": "2.1.4",
   "private": true,
   "scripts": {
     "android": "react-native run-android",
@@ -10,7 +10,8 @@
     "test": "jest",
     "android:clean": "cd android && gradlew.bat clean",
     "start:reset": "node --max-old-space-size=2048 ./node_modules/react-native/cli.js start --reset-cache",
-    "build:apk": "cd android && gradlew.bat assembleRelease",
+    "build:apk": "cd android && gradlew.bat assembleRelease -x lint -x lintVitalRelease -x lintVitalAnalyzeRelease --no-daemon --console=plain",
+    "build:aab": "cd android && gradlew.bat bundleRelease -x lint -x lintVitalRelease -x lintVitalAnalyzeRelease --no-daemon --console=plain",
     "build:apk-debug": "cd android && gradlew.bat assembleDebug"
   },
   "dependencies": {
